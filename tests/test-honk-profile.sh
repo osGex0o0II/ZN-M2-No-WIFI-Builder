@@ -39,6 +39,20 @@ if bash scripts/honk-profile.sh config "$tmp/tree" 2>/dev/null; then
   echo 'Honk accepted an injected sing-box module' >&2
   exit 1
 fi
+sed -i '/^CONFIG_PACKAGE_sing-box=m$/d' "$tmp/tree/.config"
+# bpftool is a variant package: only bpftool-minimal/bpftool-full exist, so a
+# bare CONFIG_PACKAGE_bpftool=y is silently dropped by defconfig and the image
+# ships without the only tool that can read TCX links and pinned maps back out.
+if grep -Eq '^CONFIG_PACKAGE_bpftool=' configs/honk-ebpf.config; then
+  echo 'Honk fragment selects the non-existent bare bpftool symbol' >&2
+  exit 1
+fi
+sed -i '/^CONFIG_PACKAGE_bpftool-minimal=y$/d' "$tmp/tree/.config"
+if bash scripts/honk-profile.sh config "$tmp/tree" 2>/dev/null; then
+  echo 'Honk accepted a tree without bpftool' >&2
+  exit 1
+fi
+printf 'CONFIG_PACKAGE_bpftool-minimal=y\n' >> "$tmp/tree/.config"
 if bash scripts/honk-profile.sh kernel "$tmp/tree" 2>/dev/null; then
   echo 'Honk accepted a missing kernel' >&2
   exit 1

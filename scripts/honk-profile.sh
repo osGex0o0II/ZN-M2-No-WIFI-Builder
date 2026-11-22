@@ -42,7 +42,7 @@ case "$command" in
     done
     require_line "$config" '# CONFIG_KERNEL_DEBUG_INFO_REDUCED is not set'
     require_line "$config" 'CONFIG_PACKAGE_honk=y'
-    require_line "$config" 'CONFIG_PACKAGE_bpftool=y'
+    require_line "$config" 'CONFIG_PACKAGE_bpftool-minimal=y'
     require_line "$config" 'CONFIG_PACKAGE_luci-theme-aurora=y'
     if grep -Eq '^CONFIG_PACKAGE_(luci-(app|i18n)-homeproxy[^=]*|sing-box[^=]*)=[ym]$' "$config"; then
       fail 'resolved configuration still selects a HomeProxy or sing-box package'

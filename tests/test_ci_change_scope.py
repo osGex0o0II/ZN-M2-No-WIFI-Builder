@@ -39,18 +39,17 @@ class ScopeTests(unittest.TestCase):
         self.check(["scripts/resolve-latest-upstreams.sh"], MODULE.ALL)
 
     def test_shared_and_profile_specific_files(self):
-        self.check(["files/etc/config/a"], ["libwrt", "ppe", "viking", "libwrt_ebpf", "ppe_ebpf", "viking_ebpf"])
-        self.check(["files-zn-m2/etc/config/a"], ["libwrt", "ppe", "viking", "libwrt_ebpf", "ppe_ebpf", "viking_ebpf"])
+        self.check(["files/etc/config/a"], ["libwrt", "ppe", "viking", "libwrt_ebpf", "ppe_ebpf"])
+        self.check(["files-zn-m2/etc/config/a"], ["libwrt", "ppe", "viking", "libwrt_ebpf", "ppe_ebpf"])
         self.check(["files-upstream-native/etc/config/a"], ["fanch"])
-        self.check([".github/workflows/build-profile.yml"], ["viking", "fanch", "viking_ebpf"])
-        self.check(["scripts/profile-build.sh"], ["viking", "fanch", "viking_ebpf"])
+        self.check([".github/workflows/build-profile.yml"], ["viking", "fanch"])
+        self.check(["scripts/profile-build.sh"], ["viking", "fanch"])
 
     def test_honk_isolated(self):
-        honk = ["libwrt_ebpf", "ppe_ebpf", "viking_ebpf"]
+        honk = ["libwrt_ebpf", "ppe_ebpf"]
         for path in ["package/honk/Makefile", "configs/honk-ebpf.config",
                      "scripts/honk-profile.sh"]:
             self.check([path], honk)
-        self.check(["profiles/immortalwrt-viking-main-nss-ebpf.conf"], ["viking_ebpf"])
         self.check([".github/workflows/zn-m2-immortalwrt-6.18-ppe-ebpf.yml"], ["ppe_ebpf"])
 
     def test_unknown_fails_closed(self):

@@ -38,7 +38,7 @@ $title
 	count=$((count + 1))
 done
 
-[ "$count" -eq 7 ] || fail "expected seven build lines, found $count"
+[ "$count" -eq 6 ] || fail "expected six build lines, found $count"
 
 # The two shared-profile lines must expose the same title in their workflow.
 for pair in \

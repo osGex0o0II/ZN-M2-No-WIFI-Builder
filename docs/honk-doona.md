@@ -1,6 +1,8 @@
 # Honk + Doona 测试变体
 
-LiBwrt 6.12 NSS、ImmortalWrt 6.18 PPE、ImmortalWrt 6.18 NSS 各有一个 eBPF 变体，把代理从 HomeProxy + sing-box 换成 Honk 0.1.0-beta.6 与内嵌 Doona 0.1.0-rc.6。板级、内核和转发策略与对应原版线相同。
+LiBwrt 6.12 NSS 与 ImmortalWrt 6.18 PPE 各有一个 eBPF 变体，把代理从 HomeProxy + sing-box 换成 Honk 0.1.0-beta.6 与内嵌 Doona 0.1.0-rc.6。板级、内核和转发策略与对应原版线相同。
+
+ImmortalWrt 6.18 NSS 曾在 2026-11-22 试制同名变体，实测无法在 256 MB 机型启动 Honk，因此该变体已停止发布，仓库中不再保留对应 Profile 与工作流。该线的原版镜像功能正常。
 
 ## 可用状态
 
@@ -8,22 +10,6 @@ LiBwrt 6.12 NSS、ImmortalWrt 6.18 PPE、ImmortalWrt 6.18 NSS 各有一个 eBPF 
 |:---|:---|:---|
 | LiBwrt 6.12 NSS （eBPF） | 6.12.116 | 可用 |
 | ImmortalWrt 6.18 PPE （eBPF） | 6.18.60 | 可用 |
-| ImmortalWrt 6.18 NSS （eBPF） | 6.18.55 | 不可用，Honk 无法启动 |
-
-ImmortalWrt 6.18 NSS 上 Honk 每次启动都被内核 OOM killer 结束。内核日志显示内存耗尽发生在 BPF 校验器加载程序时：
-
-```
-tokio-rt-worker invoked oom-killer: gfp_mask=0x40cc0(GFP_KERNEL|__GFP_COMP), order=0
-  __alloc_frozen_pages_noprof
-  new_slab
-  __kmalloc_cache_noprof
-  copy_verifier_state
-  do_check_common
-  bpf_check
-  bpf_prog_load
-```
-
-该线的 NSS 驱动常驻约 47 MB 不可回收 Slab，256 MB 机型没有足够余量让校验器完成加载。四次独立启动各观察 45 秒，无一存活，加载成功的程序数始终为 0。Honk 保持停用后，该线的 DNS、转发和管理面正常。
 
 ## 启停与管理
 
@@ -32,6 +18,7 @@ tokio-rt-worker invoked oom-killer: gfp_mask=0x40cc0(GFP_KERNEL|__GFP_COMP), ord
 - 防火墙只允许 `br-lan` 和 loopback 使用该端口。自建受信任的 VLAN 或 LAN 接口时，同步检查 Honk 配置和 `/etc/nftables.d/30-zn-m2-honk.nft`。
 - 默认分流为直连。NFQUEUE 默认关闭，Honk 的上游 DNS 与 dnsmasq 分离。`dns.routing.response` 使用 `fallback: accept`：把响应 fallback 指向与请求 fallback 相同的上游会让每个名称返回 SERVFAIL。
 - 规则文件为 `/etc/honk/config.dae`，管理员状态在 `/etc/honk/data/`。同线保留配置升级后复核这两个位置。
+- `sysupgrade -k` 保留 `/etc/honk/config.dae`。手工改过该文件后，升级会继续沿用旧内容；需要出厂默认值时执行 `cp /rom/etc/honk/config.dae /etc/honk/config.dae` 后重启 Honk。
 
 ## 验收记录
 
@@ -60,18 +47,6 @@ tokio-rt-worker invoked oom-killer: gfp_mask=0x40cc0(GFP_KERNEL|__GFP_COMP), ord
 | 边界 | WAN 侧 22 / 80 / 9527 全部拒绝 |
 | 硬件分载 | PPE `offloaded` 计数持续增长（92→94 / 15 秒），flowtable 覆盖 `lan1 lan2 lan3 wan` |
 | 内存余量 | `MemAvailable` 66–107 MB |
-
-**ImmortalWrt 6.18 NSS，2026-11-22，`ZN-M2-NOWIFI-immortalwrt-viking-main-nss-ebpf-6.18.55-3.1`，6.18.55**
-
-| 项目 | 实测 |
-|:---|:---|
-| 升级 | `sysupgrade -k` 后 81 秒 SSH 恢复；LAN 保持 `192.168.10.1/24` |
-| 基础功能 | DNS 5 条 A 记录，`http204=204`，`bpftool` 可用 |
-| 出厂默认 | stopped + disabled，无 Wi-Fi / USB 模块 |
-| Honk 启动 | 失败。每次启动 10–25 秒内被 OOM killer 结束，`bpf_check` 处于调用栈 |
-| 存活率 | 4 次独立启动各 45 秒：0 次存活；5 分钟观察：30 次采样中 6 次存活 |
-| 程序加载 | `bpftool prog list` 始终为 0 |
-| 停用后 | DNS、转发、管理面正常，`MemAvailable` 48 MB |
 
 ## 运行状态自查
 

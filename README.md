@@ -27,17 +27,24 @@ ZN-M2 No WIFI 是面向兆能 ZN-M2 的纯有线 OpenWrt 固件。四个固件�
 
 ## 构建线与上游
 
+四条原版线：
+
 | 构建线 | 上游 | 分支 | 内核 | 数据平面 | 界面 / 代理 |
 |---|---|---|---|---|---|
 | **LiBwrt 6.12 NSS** | `LiBwrt/LibWrt` | `25.12-nss` | 6.12 | NSS + ECM | Aurora；HomeProxy + sing-box |
-| **LiBwrt 6.12 NSS （eBPF）** | `LiBwrt/LibWrt` | `25.12-nss` | 6.12 | NSS + ECM | Aurora；Honk + Doona（待真机验收） |
 | **ImmortalWrt 6.18 PPE** | `VIKINGYFY/immortalwrt` | `owrt` | 6.18 | PPE + EDMA | Aurora；HomeProxy + sing-box |
-| **ImmortalWrt 6.18 PPE （eBPF）** | `VIKINGYFY/immortalwrt` | `owrt` | 6.18 | PPE + EDMA | Aurora；Honk + Doona（待真机验收） |
 | **ImmortalWrt 6.18 NSS** | `VIKINGYFY/immortalwrt` | `main` | 6.18 | NSS + ECM | Aurora；HomeProxy + sing-box |
-| **ImmortalWrt 6.18 NSS （eBPF）** | `VIKINGYFY/immortalwrt` | `main` | 6.18 | NSS + ECM | Aurora；Honk + Doona（待真机验收） |
 | **FanchmWrt 6.12 FWX** | `osGex0o0II/FanchmWrt` | `codex/zn-m2-25.12.6` | 6.12 | FWX / Shortcut-FE | 上游原生；不含 HomeProxy |
 
-eBPF 变体的测试状态和回退步骤见 [Honk + Doona](docs/honk-doona.md)。完整提交、配置哈希与验证状态见 [构建线说明](docs/build-lines.md) 和各 Release 的构建清单。
+eBPF 变体把代理从 HomeProxy + sing-box 换成 Honk + Doona，数据面走 eBPF；上游、内核、加速栈与对应原版线一致，因此只在原版线稳定后作为测试变体发布 Pre-release。
+
+| 变体 | Profile ID | 对应原版线 | 数据平面 | 真机验收 |
+|---|---|---|---|---|
+| **LiBwrt 6.12 NSS （eBPF）** | `libwrt-25.12-nss-ebpf` | LiBwrt 6.12 NSS | NSS + ECM | 2026-11-22，6.12.116 |
+| **ImmortalWrt 6.18 PPE （eBPF）** | `immortalwrt-viking-owrt-ppe-ebpf` | ImmortalWrt 6.18 PPE | PPE + EDMA | 2026-11-21，6.18.60 |
+| **ImmortalWrt 6.18 NSS （eBPF）** | `immortalwrt-viking-main-nss-ebpf` | ImmortalWrt 6.18 NSS | NSS + ECM | 待补 |
+
+eBPF 变体的测试细节、已知告警和回退步骤见 [Honk + Doona](docs/honk-doona.md)。完整提交、配置哈希与验证状态见 [构建线说明](docs/build-lines.md) 和各 Release 的构建清单。
 
 ## 默认访问
 

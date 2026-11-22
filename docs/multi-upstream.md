@@ -1,8 +1,8 @@
 # 多上游构建与验收
 
-适用于兆能 ZN-M2。最低要求为原厂 256 MB 内存机型；1 GB 扩容机型已在真机验证，其他扩容容量以设备实际识别为准。四条构建线在上游、加速栈和运行时配置上相互独立；**构建成功与发布 Release 均不等于通过完整真机验收**。
+适用于兆能 ZN-M2。最低要求为原厂 256 MB 内存机型；1 GB 扩容机型已在真机验证，其他扩容容量以设备实际识别为准。四条原版构建线和三条 eBPF 变体在上游、加速栈和运行时配置上相互独立；**构建成功与发布 Release 均不等于通过完整真机验收**。
 
-## 构建线
+## 原版构建线
 
 | Profile | 源码 | 加速 | 软件策略 |
 |:---|:---|:---|:---|
@@ -12,6 +12,16 @@
 | `fanchmwrt-25.12` | 项目维护的 FanchmWrt 分支 | FWX / Shortcut-FE | 上游原生 |
 
 前两条使用独立的主力工作流；后两条使用共享 Profile 构建流程。已发布 Release 的构建线仍需分别完成设备实测。
+
+## eBPF 变体
+
+| Profile | 对应原版线 | 加速 | 软件策略 |
+|:---|:---|:---|:---|
+| `libwrt-25.12-nss-ebpf` | `libwrt-25.12-nss` | NSS + ECM | Aurora / Honk + Doona |
+| `immortalwrt-viking-owrt-ppe-ebpf` | `immortalwrt-viking-owrt-ppe` | PPE + EDMA | Aurora / Honk + Doona |
+| `immortalwrt-viking-main-nss-ebpf` | `immortalwrt-viking-main-nss` | NSS + ECM | Aurora / Honk + Doona |
+
+eBPF 变体只替换代理实现，板级、内核与加速栈沿用对应原版线。LiBwrt 与 ImmortalWrt PPE 已在真机验收，ImmortalWrt NSS 待补。
 
 ## 版本解析
 

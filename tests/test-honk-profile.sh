@@ -5,7 +5,7 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$tmp/tree/package"
 
-for profile in libwrt-25.12-nss immortalwrt-viking-owrt-ppe immortalwrt-viking-main-nss; do
+for profile in libwrt-25.12-nss immortalwrt-viking-owrt-ppe; do
   stable=$(bash scripts/load-profile.sh "$profile")
   honk=$(bash scripts/load-profile.sh "$profile-ebpf")
   grep -Fxq 'SOFTWARE_POLICY=aurora-homeproxy' <<< "$stable"
@@ -20,23 +20,11 @@ for profile in libwrt-25.12-nss immortalwrt-viking-owrt-ppe immortalwrt-viking-m
     echo 'Honk release notes describe the original proxy stack' >&2
     exit 1
   fi
-  # Only the two working variants may claim device validation.
-  case "$profile" in
-  libwrt-25.12-nss|immortalwrt-viking-owrt-ppe)
-    grep -Fq '已在 256 MB 原厂设备完成真机验收' <<< "$notes"
-    if grep -Fq '无法启动' <<< "$notes"; then
-      echo "$profile-ebpf wrongly claims a startup failure" >&2
-      exit 1
-    fi
-    ;;
-  immortalwrt-viking-main-nss)
-    grep -Fq '无法启动' <<< "$notes"
-    if grep -Fq '完成真机验收' <<< "$notes"; then
-      echo "$profile-ebpf wrongly claims device validation" >&2
-      exit 1
-    fi
-    ;;
-  esac
+  grep -Fq '已在 256 MB 原厂设备完成真机验收' <<< "$notes"
+  if grep -Fq '无法启动' <<< "$notes"; then
+    echo "$profile-ebpf wrongly claims a startup failure" >&2
+    exit 1
+  fi
 done
 
 cat > "$tmp/tree/.config" <<'CONFIG'

@@ -14,7 +14,7 @@ ZN-M2 No WIFI 的组件大多来自上游 OpenWrt、ImmortalWrt、LiBwrt、Fanch
 
 ## 软件与插件
 
-| 能力 | 三条 Aurora 原版线（LiBwrt / PPE / Viking NSS） | 三条 eBPF 变体 | FanchmWrt 6.12 FWX |
+| 能力 | 三条 Aurora 原版线（LiBwrt / PPE / Viking NSS） | 两条 eBPF 变体 | FanchmWrt 6.12 FWX |
 |---|---|---|---|
 | 管理界面 | Aurora + 简体中文 | Aurora + 简体中文 | 上游原生界面 |
 | 代理 | HomeProxy + sing-box | Honk + Doona（eBPF，出厂停用） | 不包含 HomeProxy，以上游包集为准 |
@@ -42,12 +42,12 @@ ZN-M2 No WIFI 的组件大多来自上游 OpenWrt、ImmortalWrt、LiBwrt、Fanch
 | 内核、驱动、数据平面 | OpenWrt / ImmortalWrt / LiBwrt / FanchmWrt | 选型、固定提交、适配 DTS 与镜像 |
 | LuCI、HomeProxy、sing-box | 上游与 VIKINGYFY 软件源 | 选择包源、固定版本、默认配置、集成验证 |
 | Honk、Doona | 上游发布物 | 固定版本与哈希、eBPF 内核选项、出厂配置与真机验证 |
-| 构建 | 上游 SDK / ImageBuilder 流程 | 四条原版线、三条 eBPF 变体、缓存、构建清单、发布门禁 |
+| 构建 | 上游 SDK / ImageBuilder 流程 | 四条原版线、两条 eBPF 变体、缓存、构建清单、发布门禁 |
 | 发布 | GitHub Releases | 资产命名、SHA256、发布说明、保留策略 |
 
 ## 交付
 
-- 四条原版线各自有独立工作流与发布流程；三条 eBPF 变体在对应原版线的基线上单独构建，以 Pre-release 发布。
+- 四条原版线各自有独立工作流与发布流程；两条 eBPF 变体在对应原版线的基线上单独构建，以 Pre-release 发布。
 - 每次构建生成 `BUILD-MANIFEST.txt`，记录上游仓库、分支、提交、内核、配置与适配器哈希。
 - Release 附带 factory / sysupgrade 镜像与 SHA256；发布门禁要求构建成功、资产校验通过。
 - 发布说明区分“构建完成”和“真机验收完成”，不把前者写成后者。

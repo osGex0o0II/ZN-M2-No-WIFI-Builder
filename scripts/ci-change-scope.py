@@ -8,7 +8,10 @@ import subprocess
 import sys
 
 BASE_PROFILES = ("libwrt", "ppe", "viking", "fanch")
-HONK_PROFILES = {base: f"{base}_ebpf" for base in BASE_PROFILES if base != "fanch"}
+HONK_PROFILES = {
+    "libwrt": "libwrt_ebpf",
+    "ppe": "ppe_ebpf",
+}
 PROFILES = BASE_PROFILES + tuple(HONK_PROFILES.values())
 ALL = frozenset(PROFILES)
 # Only non-firmware publication and housekeeping inputs can bypass cross-builds.
@@ -26,7 +29,6 @@ WORKFLOWS = {
     ".github/workflows/zn-m2-256m-viking-nss.yml": "viking",
     ".github/workflows/zn-m2-libwrt-6.12-nss-ebpf.yml": "libwrt_ebpf",
     ".github/workflows/zn-m2-immortalwrt-6.18-ppe-ebpf.yml": "ppe_ebpf",
-    ".github/workflows/zn-m2-viking-6.18-nss-ebpf.yml": "viking_ebpf",
     ".github/workflows/zn-m2-256m-fanchmwrt-fwx.yml": "fanch",
 }
 CONFIGS = {
@@ -48,7 +50,6 @@ SOURCES = {
     "profiles/fanchmwrt-25.12.conf": "fanch",
     "profiles/libwrt-25.12-nss-ebpf.conf": "libwrt_ebpf",
     "profiles/immortalwrt-viking-owrt-ppe-ebpf.conf": "ppe_ebpf",
-    "profiles/immortalwrt-viking-main-nss-ebpf.conf": "viking_ebpf",
     "adapters/immortalwrt-viking-main-nss.sh": "viking",
     "adapters/fanchmwrt-25.12.sh": "fanch",
 }

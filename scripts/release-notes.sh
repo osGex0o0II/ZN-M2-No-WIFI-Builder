@@ -218,7 +218,7 @@ checksums() {
 }
 
 case "$profile" in
-libwrt-25.12-nss-ebpf|immortalwrt-viking-owrt-ppe-ebpf|immortalwrt-viking-main-nss-ebpf)
+libwrt-25.12-nss-ebpf|immortalwrt-viking-owrt-ppe-ebpf)
 	root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 	source "$root/profiles/$profile.conf"
 	case "$ACCELERATION_POLICY" in
@@ -227,12 +227,9 @@ libwrt-25.12-nss-ebpf|immortalwrt-viking-owrt-ppe-ebpf|immortalwrt-viking-main-n
 	esac
 	kernel=6.18
 	if [ "$profile" = libwrt-25.12-nss-ebpf ]; then kernel=6.12; fi
-	# Two variants run on 256 MB hardware; the NSS 6.18 variant cannot load its
-	# BPF programs because the NSS driver leaves too little free memory there.
 	case "$profile" in
 	libwrt-25.12-nss-ebpf) validation="2026-11-22 已在 256 MB 原厂设备完成真机验收（内核 6.12.116）";;
-	immortalwrt-viking-owrt-ppe-ebpf) validation="2026-11-21 已在 256 MB 原厂设备完成真机验收（内核 6.18.60）";;
-	*) validation="2026-11-22 实测：Honk 在 256 MB 原厂机型无法启动，详见项目文档";;
+	*) validation="2026-11-21 已在 256 MB 原厂设备完成真机验收（内核 6.18.60）";;
 	esac
 	cat <<EOF
 

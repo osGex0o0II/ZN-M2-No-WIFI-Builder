@@ -23,7 +23,7 @@
 
 ## 概览
 
-ZN-M2 No WIFI 是面向兆能 ZN-M2 的纯有线 OpenWrt 固件。四个固件基线分别基于 LiBwrt 25.12、ImmortalWrt 6.18 与 FanchmWrt 25.12，覆盖 NSS、PPE 与 FWX 三种转发路径。三个含代理的基线各提供一个 Honk + Doona eBPF 测试变体，共七条构建线。
+ZN-M2 No WIFI 是面向兆能 ZN-M2 的纯有线 OpenWrt 固件。四个固件基线分别基于 LiBwrt 25.12、ImmortalWrt 6.18 与 FanchmWrt 25.12，覆盖 NSS、PPE 与 FWX 三种转发路径。两个含代理的基线各提供一个 Honk + Doona eBPF 测试变体，共六条构建线。
 
 ## 构建线与上游
 
@@ -42,11 +42,8 @@ eBPF 变体把代理从 HomeProxy + sing-box 换成 Honk + Doona，数据面走 
 |---|---|---|---|---|
 | **LiBwrt 6.12 NSS （eBPF）** | `libwrt-25.12-nss-ebpf` | LiBwrt 6.12 NSS | NSS + ECM | 可用（6.12.116） |
 | **ImmortalWrt 6.18 PPE （eBPF）** | `immortalwrt-viking-owrt-ppe-ebpf` | ImmortalWrt 6.18 PPE | PPE + EDMA | 可用（6.18.60） |
-| **ImmortalWrt 6.18 NSS （eBPF）** | `immortalwrt-viking-main-nss-ebpf` | ImmortalWrt 6.18 NSS | NSS + ECM | 不可用（6.18.55） |
 
-ImmortalWrt 6.18 NSS 的 Honk 无法在 256 MB 机型启动，详见 [Honk + Doona](docs/honk-doona.md)。
-
-eBPF 变体的测试细节、已知告警和回退步骤见 [Honk + Doona](docs/honk-doona.md)。完整提交、配置哈希与验证状态见 [构建线说明](docs/build-lines.md) 和各 Release 的构建清单。
+两个 eBPF 变体的测试细节、已知告警和回退步骤见 [Honk + Doona](docs/honk-doona.md)。完整提交、配置哈希与验证状态见 [构建线说明](docs/build-lines.md) 和各 Release 的构建清单。
 
 ## 默认访问
 
@@ -66,7 +63,7 @@ eBPF 变体的测试细节、已知告警和回退步骤见 [Honk + Doona](docs/
 |---|---|---|---|
 | HomeProxy | `20261117-r3` | LiBwrt / ImmortalWrt 三条原版 | 未配置节点时不产生代理流量 |
 | sing-box | `1.15.0_alpha13-r1` | LiBwrt / ImmortalWrt 三条原版 | HomeProxy 运行时 |
-| Honk / Doona | `0.1.0-beta.6` / `0.1.0-rc.6` | 三条 eBPF 变体 | 内嵌管理 UI，服务默认停用 |
+| Honk / Doona | `0.1.0-beta.6` / `0.1.0-rc.6` | 两个 eBPF 变体 | 内嵌管理 UI，服务默认停用 |
 | Aurora | `1.4.3-r20261104` | LiBwrt / ImmortalWrt 6.18 | 默认简体中文 |
 | gecoosac | `20261016-r1` | LiBwrt / ImmortalWrt 6.18 | 已安装，服务默认停用 |
 | ZeroTier / UPnP / ttyd / autoreboot / package-manager | 随构建线 | LiBwrt / ImmortalWrt 6.18 | 已安装；功能默认关闭 |
@@ -92,7 +89,7 @@ LuCI 组件版本：LiBwrt 为 `26.315.10183~8f18275`，ImmortalWrt 6.18 为 `26
 | 文档 | 内容 |
 |---|---|
 | [安装与恢复](docs/installation.md) | 镜像选择、SHA256、首次刷机、恢复 |
-| [构建线说明](docs/build-lines.md) | 七条线的差异、验证状态与选择建议 |
+| [构建线说明](docs/build-lines.md) | 六条线的差异、验证状态与选择建议 |
 | [功能与边界](docs/features.md) | 插件、数据平面、运行时加固、上游与项目的分工 |
 | [性能与内存](docs/performance.md) | 历史转发数据、NSS / PPE 内存差异、代理边界 |
 | [常见问题](docs/faq.md) | 无 Wi-Fi、内存、代理加速、升级与恢复 |

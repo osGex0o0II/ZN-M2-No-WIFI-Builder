@@ -70,7 +70,6 @@ jobs:
       compile_required: ${{ steps.filter.outputs.compile_required }}
       variants: ${{ steps.filter.outputs.variants }}
       viking: ${{ steps.filter.outputs.viking }}
-      viking_ebpf: ${{ steps.filter.outputs.viking_ebpf }}
       fanch: ${{ steps.filter.outputs.fanch }}
     steps:
       - name: Check out repository
@@ -998,17 +997,6 @@ jobs:
       profile: immortalwrt-viking-main-nss
       title: ZN-M2 ImmortalWrt 6.18 NSS
 
-  viking_ebpf:
-    name: Verify affected Viking NSS Honk profile
-    needs: [changes, quick]
-    if: ${{ !cancelled() && github.event_name == 'pull_request' && needs.quick.result == 'success' && needs.changes.outputs.viking_ebpf == 'true' }}
-    permissions:
-      contents: read
-    uses: ./.github/workflows/build-profile.yml
-    with:
-      profile: immortalwrt-viking-main-nss-ebpf
-      title: ZN-M2 ImmortalWrt 6.18 NSS （eBPF）
-
   fanch:
     name: Verify affected FanchmWrt FWX profile
     needs: [changes, quick]
@@ -1024,7 +1012,7 @@ jobs:
   gate:
     # Backward-compatible required check name; compilation is a different job.
     name: Build ZN-M2 LiBwrt 6.12 NSS
-    needs: [changes, quick, build, viking, viking_ebpf, fanch]
+    needs: [changes, quick, build, viking, fanch]
     if: ${{ always() && github.event_name == 'pull_request' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -1042,8 +1030,6 @@ jobs:
           VIKING_REQUIRED: ${{ needs.changes.outputs.viking }}
           FANCH_REQUIRED: ${{ needs.changes.outputs.fanch }}
           VIKING_RESULT: ${{ needs.viking.result }}
-          VIKING_EBPF_REQUIRED: ${{ needs.changes.outputs.viking_ebpf }}
-          VIKING_EBPF_RESULT: ${{ needs.viking_ebpf.result }}
           FANCH_RESULT: ${{ needs.fanch.result }}
         run: bash scripts/ci-gate.sh
 

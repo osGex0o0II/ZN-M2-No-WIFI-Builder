@@ -20,17 +20,21 @@ for profile in libwrt-25.12-nss immortalwrt-viking-owrt-ppe immortalwrt-viking-m
     echo 'Honk release notes describe the original proxy stack' >&2
     exit 1
   fi
-  # Only the two validated lines may claim device validation.
+  # Only the two working variants may claim device validation.
   case "$profile" in
   libwrt-25.12-nss|immortalwrt-viking-owrt-ppe)
     grep -Fq '已在 256 MB 原厂设备完成真机验收' <<< "$notes"
-    if grep -Fq '待真机验收' <<< "$notes"; then
-      echo "$profile-ebpf still advertises an unvalidated build" >&2
+    if grep -Fq '无法启动' <<< "$notes"; then
+      echo "$profile-ebpf wrongly claims a startup failure" >&2
       exit 1
     fi
     ;;
   immortalwrt-viking-main-nss)
-    grep -Fq '待真机验收' <<< "$notes"
+    grep -Fq '无法启动' <<< "$notes"
+    if grep -Fq '完成真机验收' <<< "$notes"; then
+      echo "$profile-ebpf wrongly claims device validation" >&2
+      exit 1
+    fi
     ;;
   esac
 done

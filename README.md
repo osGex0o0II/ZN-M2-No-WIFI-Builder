@@ -38,11 +38,13 @@ ZN-M2 No WIFI 是面向兆能 ZN-M2 的纯有线 OpenWrt 固件。四个固件�
 
 eBPF 变体把代理从 HomeProxy + sing-box 换成 Honk + Doona，数据面走 eBPF；上游、内核、加速栈与对应原版线一致，因此只在原版线稳定后作为测试变体发布 Pre-release。
 
-| 变体 | Profile ID | 对应原版线 | 数据平面 | 真机验收 |
+| 变体 | Profile ID | 对应原版线 | 数据平面 | 256 MB 原厂机型 |
 |---|---|---|---|---|
-| **LiBwrt 6.12 NSS （eBPF）** | `libwrt-25.12-nss-ebpf` | LiBwrt 6.12 NSS | NSS + ECM | 2026-11-22，6.12.116 |
-| **ImmortalWrt 6.18 PPE （eBPF）** | `immortalwrt-viking-owrt-ppe-ebpf` | ImmortalWrt 6.18 PPE | PPE + EDMA | 2026-11-21，6.18.60 |
-| **ImmortalWrt 6.18 NSS （eBPF）** | `immortalwrt-viking-main-nss-ebpf` | ImmortalWrt 6.18 NSS | NSS + ECM | 待补 |
+| **LiBwrt 6.12 NSS （eBPF）** | `libwrt-25.12-nss-ebpf` | LiBwrt 6.12 NSS | NSS + ECM | 可用（6.12.116） |
+| **ImmortalWrt 6.18 PPE （eBPF）** | `immortalwrt-viking-owrt-ppe-ebpf` | ImmortalWrt 6.18 PPE | PPE + EDMA | 可用（6.18.60） |
+| **ImmortalWrt 6.18 NSS （eBPF）** | `immortalwrt-viking-main-nss-ebpf` | ImmortalWrt 6.18 NSS | NSS + ECM | 不可用（6.18.55） |
+
+ImmortalWrt 6.18 NSS 的 Honk 无法在 256 MB 机型启动，详见 [Honk + Doona](docs/honk-doona.md)。
 
 eBPF 变体的测试细节、已知告警和回退步骤见 [Honk + Doona](docs/honk-doona.md)。完整提交、配置哈希与验证状态见 [构建线说明](docs/build-lines.md) 和各 Release 的构建清单。
 

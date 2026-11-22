@@ -15,11 +15,13 @@ ZN-M2 No WIFI 提供四条原版构建线和三条 eBPF 测试变体。它们共
 
 eBPF 变体把代理从 HomeProxy + sing-box 换成 Honk + Doona，数据面走 eBPF；上游、内核、加速栈与对应原版线一致，因此只在原版线稳定后作为测试变体发布 Pre-release。
 
-| 变体 | Profile ID | 对应原版线 | 数据平面 | 真机验收 |
+| 变体 | Profile ID | 对应原版线 | 数据平面 | 256 MB 原厂机型 |
 |---|---|---|---|---|
-| **LiBwrt 6.12 NSS （eBPF）** | `libwrt-25.12-nss-ebpf` | LiBwrt 6.12 NSS | NSS + ECM | 2026-11-22，6.12.116 |
-| **ImmortalWrt 6.18 PPE （eBPF）** | `immortalwrt-viking-owrt-ppe-ebpf` | ImmortalWrt 6.18 PPE | PPE + EDMA | 2026-11-21，6.18.60 |
-| **ImmortalWrt 6.18 NSS （eBPF）** | `immortalwrt-viking-main-nss-ebpf` | ImmortalWrt 6.18 NSS | NSS + ECM | 待补 |
+| **LiBwrt 6.12 NSS （eBPF）** | `libwrt-25.12-nss-ebpf` | LiBwrt 6.12 NSS | NSS + ECM | 可用（6.12.116） |
+| **ImmortalWrt 6.18 PPE （eBPF）** | `immortalwrt-viking-owrt-ppe-ebpf` | ImmortalWrt 6.18 PPE | PPE + EDMA | 可用（6.18.60） |
+| **ImmortalWrt 6.18 NSS （eBPF）** | `immortalwrt-viking-main-nss-ebpf` | ImmortalWrt 6.18 NSS | NSS + ECM | 不可用（6.18.55） |
+
+ImmortalWrt 6.18 NSS 的 Honk 无法在 256 MB 机型启动，原因见 [Honk + Doona](honk-doona.md)。
 
 Profile ID、工作流文件名和 Release tag slug 是稳定技术标识，含义与兼容规则见 [项目结构与命名](naming.md)。
 
@@ -37,12 +39,13 @@ eBPF 变体：
 - 先确认对应的原版线满足需求，再选择同名的 （eBPF） 变体，用于试用 Honk + Doona 的 eBPF 代理。
 - eBPF 变体以 Pre-release 发布，未接入你的节点和规则前默认全部直连。
 - Honk 仍是 `0.1.0-beta.6`，不要把 eBPF 变体当作稳定主力线。
+- ImmortalWrt 6.18 NSS 的 eBPF 变体在 256 MB 机型不可用。
 
 全部构建线都面向纯有线配置。不同数据平面的实际差异、验证范围和性能数据见 [功能与边界](features.md) 与 [性能与内存](performance.md)。
 
 ## 验证状态
 
-- 三条 eBPF 变体各自独立构建。LiBwrt（2026-11-22，6.12.116）与 ImmortalWrt PPE（2026-11-21，6.18.60）已在 256 MB 原厂设备完成真机验收：冷启动、DNS、管理面、WAN 边界与硬件分载共存均已实测；ImmortalWrt NSS 的真机验收待补。详见 [Honk + Doona](honk-doona.md)。
+- 三条 eBPF 变体各自独立构建。LiBwrt（6.12.116）与 ImmortalWrt PPE（6.18.60）在 256 MB 原厂机型可用；ImmortalWrt NSS（6.18.55）的 Honk 无法启动，该线的原版功能正常。详见 [Honk + Doona](honk-doona.md)。
 - LiBwrt 6.12 NSS 与 ImmortalWrt 6.18 PPE 是长期维护的主力线，构建、发布和主要功能路径已有持续验证。
 - ImmortalWrt 6.18 NSS 与 FanchmWrt 6.12 FWX 使用共享 Profile 构建流程；已发布 Release，但不代表全部功能都已完成真机验收。
 - 所有 Release 都附构建清单、源码提交和 SHA256；构建成功不等于设备验收完成。

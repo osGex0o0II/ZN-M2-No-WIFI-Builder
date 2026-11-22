@@ -21,7 +21,7 @@
 | `immortalwrt-viking-owrt-ppe-ebpf` | `immortalwrt-viking-owrt-ppe` | PPE + EDMA | Aurora / Honk + Doona |
 | `immortalwrt-viking-main-nss-ebpf` | `immortalwrt-viking-main-nss` | NSS + ECM | Aurora / Honk + Doona |
 
-eBPF 变体只替换代理实现，板级、内核与加速栈沿用对应原版线。LiBwrt 与 ImmortalWrt PPE 已在真机验收，ImmortalWrt NSS 待补。
+eBPF 变体只替换代理实现，板级、内核与加速栈沿用对应原版线。LiBwrt 与 ImmortalWrt PPE 在 256 MB 机型可用，ImmortalWrt NSS 因内存不足无法启动 Honk。
 
 ## 版本解析
 

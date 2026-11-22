@@ -1,77 +1,81 @@
 # Honk + Doona 测试变体
 
-LiBwrt 6.12 NSS、ImmortalWrt 6.18 PPE、ImmortalWrt 6.18 NSS 都有独立 eBPF 变体。变体沿用相应基线的板级、内核和转发策略，使用 Honk 0.1.0-beta.6 和内嵌 Doona 0.1.0-rc.6。
+LiBwrt 6.12 NSS、ImmortalWrt 6.18 PPE、ImmortalWrt 6.18 NSS 各有一个 eBPF 变体，把代理从 HomeProxy + sing-box 换成 Honk 0.1.0-beta.6 与内嵌 Doona 0.1.0-rc.6。板级、内核和转发策略与对应原版线相同。
 
-三条线已完成静态验收（包集合、内核 eBPF 开关、Honk 资产哈希、镜像内配置）。PPE 与 LiBwrt 已在 256 MB 原厂设备完成真机验收；ImmortalWrt NSS 的真机验收待补。
+## 可用状态
 
-2026-11-22 的两条修复让出厂镜像可以直接使用：`dns.routing.response` 改为 `fallback: accept`，以及镜像内置 `bpftool`、内核打开 `CONFIG_FUNCTION_TRACER`/`CONFIG_DYNAMIC_FTRACE`。此前所有 eBPF 镜像都不带 `bpftool`，UDP receive-trace 也一直降级。
+| 变体 | 内核 | 256 MB 原厂机型 |
+|:---|:---|:---|
+| LiBwrt 6.12 NSS （eBPF） | 6.12.116 | 可用 |
+| ImmortalWrt 6.18 PPE （eBPF） | 6.18.60 | 可用 |
+| ImmortalWrt 6.18 NSS （eBPF） | 6.18.55 | 不可用，Honk 无法启动 |
+
+ImmortalWrt 6.18 NSS 上 Honk 每次启动都被内核 OOM killer 结束。内核日志显示内存耗尽发生在 BPF 校验器加载程序时：
+
+```
+tokio-rt-worker invoked oom-killer: gfp_mask=0x40cc0(GFP_KERNEL|__GFP_COMP), order=0
+  __alloc_frozen_pages_noprof
+  new_slab
+  __kmalloc_cache_noprof
+  copy_verifier_state
+  do_check_common
+  bpf_check
+  bpf_prog_load
+```
+
+该线的 NSS 驱动常驻约 47 MB 不可回收 Slab，256 MB 机型没有足够余量让校验器完成加载。四次独立启动各观察 45 秒，无一存活，加载成功的程序数始终为 0。Honk 保持停用后，该线的 DNS、转发和管理面正常。
 
 ## 启停与管理
 
-- 出厂默认停止 Honk。先保存现有配置和原版镜像，通过 LuCI「服务 → Honk 代理」显式启动。确认管理连接正常后再选择开机自启。
+- 出厂默认停止 Honk。先备份配置和原版镜像，通过 LuCI「服务 → Honk 代理」显式启动。
 - Doona 在受信任的 LAN 上通过路由器 IP 和 9527 端口访问。LuCI 页面提供跳转入口。首次打开 Doona 时创建管理员。
-- 内附防火墙只允许 `br-lan` 和 loopback 使用该端口。自建受信任的 VLAN 或 LAN 接口时，同步评估 Honk 配置和 `/etc/nftables.d/30-zn-m2-honk.nft`。
-- 默认分流为直连。NFQUEUE 默认关闭，Honk 的上游 DNS 与 dnsmasq 分离。出厂 `dns.routing.response` 使用 `fallback: accept`：把响应 fallback 指向与请求 fallback 相同的上游会触发 honk 的 requery cycle 保护，整机 DNS 在启动约 10 秒后全部变成 SERVFAIL。接入自己的节点、订阅和规则后再次验证 DNS、TCP、UDP 和 IPv6。
-- 规则文件为 `/etc/honk/config.dae`，管理员状态在 `/etc/honk/data/`。同线保留配置升级后复核这两个位置及防火墙设置。
+- 防火墙只允许 `br-lan` 和 loopback 使用该端口。自建受信任的 VLAN 或 LAN 接口时，同步检查 Honk 配置和 `/etc/nftables.d/30-zn-m2-honk.nft`。
+- 默认分流为直连。NFQUEUE 默认关闭，Honk 的上游 DNS 与 dnsmasq 分离。`dns.routing.response` 使用 `fallback: accept`：把响应 fallback 指向与请求 fallback 相同的上游会让每个名称返回 SERVFAIL。
+- 规则文件为 `/etc/honk/config.dae`，管理员状态在 `/etc/honk/data/`。同线保留配置升级后复核这两个位置。
 
-## 维护验证
+## 验收记录
 
-先在 256 MB 原厂设备验收 PPE，再验证 LiBwrt NSS、ImmortalWrt NSS。每条线与同一组上游依赖的原版做对照，分别记录直连、代理吞吐、硬件分载计数、Honk RSS 和可用内存。
-
-**PPE 真机验收结果（2026-11-21，`ImmortalWrt-2026.11.21.2.1-ZN_M2-NOWIFI-6.18-PPE-ebpf`，内核 6.18.60）**：
+**LiBwrt 6.12 NSS，2026-11-22，`LiBwrt-2026.11.22.3.1-ZN_M2-NOWIFI-6.12-NSS-ebpf`，6.12.116**
 
 | 项目 | 实测 |
-|---|---|
-| 冷启动与恢复 | `sysupgrade -k` 后 62 秒 SSH 恢复；LAN 保持 `192.168.10.1/24`，WAN `192.168.1.134/24` |
-| DNS 与分流 | honk 运行 573 秒内 20 次采样（dnsmasq / 直连 223.5.5.5 / 直连 1.1.1.1）全部成功，`requery cycle` 日志 0 条 |
-| 运行与重载 | VmRSS 19.2→20.3 MB，VmHWM 稳定 36.1 MB，无增长；load average 0.04 |
-| 边界 | WAN 侧访问 9527 / 22 / 80 全部拒绝；`ath11k`/`cfg80211`/`mac80211` 模块 0 个 |
-| 硬件分载 | PPE `offloaded` 计数在 honk 运行时持续增长（92→94/15s），flowtable `ft` 覆盖 `lan1 lan2 lan3 wan` |
-| 管理面 | Doona `127.0.0.1:9527/` 正常（`doona-build=e85fc6a59ad04821`），`/sys/fs/bpf` 36 个 map，`dae0@if9 UP` |
-| 内存余量 | 刷机后 `MemAvailable` 66–107 MB，Swap 使用 1.3 MB |
+|:---|:---|
+| 升级 | `sysupgrade -k` 后 45 秒 SSH 恢复；LAN 保持 `192.168.10.1/24` |
+| DNS | 连续 24 秒采样 3 次、每次 5 条 A 记录；路由器直连 223.5.5.5 与 1.1.1.1 均通 |
+| Honk 进程 | VmRSS 21.6 MB，VmHWM 34,972 kB 恒定；14–16 线程 |
+| BPF 挂载 | `/sys/fs/bpf` 46 个 map，5 个 UDP receive tracing 程序 |
+| 管理面 | Doona `192.168.10.1:9527` 从 LAN 可达 |
+| 边界 | WAN 侧 22 / 80 / 9527 全部拒绝 |
+| 硬件分载 | NSS 固件与 ECM 正常；Honk 停止后转发回到原始路径 |
+| 出厂默认 | stopped + disabled，`/etc/rc.d` 无链接 |
 
-同一次验收还确认了两个缺陷的修复：镜像内 `/etc/honk/config.dae` 的 `dns.routing.response` 为 `fallback: accept`；`96-clean-foreign-config.sh` 已含 homeproxy/sing-box 白名单与 `dnsmasq-homeproxy` 片段清理。
-
-**LiBwrt 真机验收结果（2026-11-22，`LiBwrt-2026.11.21.2.1-ZN_M2-NOWIFI-6.12-NSS-ebpf`，内核 6.12.116）**：
-
-| 项目 | 实测 |
-|---|---|
-| 冷启动与恢复 | `sysupgrade -k` 后 52 秒 SSH 恢复；LAN 保持 `192.168.10.1/24` |
-| DNS 与分流 | honk 运行 364 秒内 13 次采样全部成功，`requery cycle` 日志 0 条 |
-| 运行与重载 | VmRSS 19.7→20.1 MB（+0.4 MB/6 分钟），VmHWM 稳定 35.1 MB；load average 0.03–0.05 |
-| 边界 | WAN 侧访问 9527 / 22 / 80 全部超时拒绝；`ath11k`/`cfg80211`/`mac80211` 模块 0 个 |
-| 硬件分载 | NSS 固件 `NSS.FW.12.2-161-CP.R` core 0 正常启动；ECM `accelerated_count` 随流量 0→2→4 增长 |
-| 管理面 | Doona `127.0.0.1:9527/` 正常，`/sys/fs/bpf` 36 个 map，`dae0@if9 UP` |
-| 内存余量 | `MemAvailable` 64–67 MB，Swap 使用 4 MB |
-
-两条线共同的结论：eBPF 数据面与原有硬件加速共存，honk 停掉后转发立即回到原始路径；出厂默认不启动 honk，也不会在升级后自行启用。
-
-**LiBwrt 复验（2026-11-22，`LiBwrt-2026.11.22.3.1-ZN_M2-NOWIFI-6.12-NSS-ebpf`，内核 6.12.116）——本轮修复的验收**：
+**ImmortalWrt 6.18 PPE，2026-11-21，`ImmortalWrt-2026.11.21.2.1-ZN_M2-NOWIFI-6.18-PPE-ebpf`，6.18.60**
 
 | 项目 | 实测 |
-|---|---|
-| `bpftool` | `/usr/sbin/bpftool -> /usr/libexec/bpftool-minimal`（536,592 B），`bpftool prog list` / `map list` 正常 |
-| ftrace | `CONFIG_FUNCTION_TRACER=y`、`CONFIG_DYNAMIC_FTRACE=y`，`/sys/kernel/tracing` 存在 |
-| UDP receive trace | 加载 5 个 tracing 程序（`honk_udp_receive_{candidate,enter,exit}`、`honk_udp6_receive_{enter,exit}`），`UDP receive trace unavailable` 告警 **0 条**（修复前每次启动必报） |
-| 镜像一致性 | `/etc/honk/config.dae` 与 `/rom` 副本 sha256 一致 `eabf49a1...`；`bpftool-minimal` 与 `honk-core` 哈希与镜像内文件逐字节相同 |
-| DNS | honk 运行中 3 轮 × 8 秒采样全部 5 条 A 记录；路由器直连 223.5.5.5 与 1.1.1.1 均通 |
-| 边界 | WAN 侧 22 / 80 / 9527 全部拒绝；LAN 侧 9527 可达 |
-| 出厂默认 | honk stopped + disabled，`/etc/rc.d` 无链接 |
+|:---|:---|
+| 升级 | `sysupgrade -k` 后 62 秒 SSH 恢复；LAN `192.168.10.1/24`，WAN `192.168.1.134/24` |
+| DNS | 573 秒内 20 次采样（dnsmasq / 直连 223.5.5.5 / 直连 1.1.1.1）全部成功 |
+| Honk 进程 | VmRSS 19.2→20.3 MB，VmHWM 36.1 MB |
+| BPF 挂载 | `/sys/fs/bpf` 36 个 map |
+| 管理面 | Doona `127.0.0.1:9527` 正常，`dae0@if9 UP` |
+| 边界 | WAN 侧 22 / 80 / 9527 全部拒绝 |
+| 硬件分载 | PPE `offloaded` 计数持续增长（92→94 / 15 秒），flowtable 覆盖 `lan1 lan2 lan3 wan` |
+| 内存余量 | `MemAvailable` 66–107 MB |
 
-同一次验收确认 `sysupgrade -k` 会保留上一版的 `/etc/honk/config.dae`（本轮保留了手工调成 `log_level: debug` 的版本），升级后需要与 `/rom/etc/honk/config.dae` 对比后决定是否采用新版默认。
+**ImmortalWrt 6.18 NSS，2026-11-22，`ZN-M2-NOWIFI-immortalwrt-viking-main-nss-ebpf-6.18.55-3.1`，6.18.55**
 
-| 项目 | 验收内容 |
-|---|---|
-| 首次启动和可恢复性 | 冷启动、首次获得 DHCP、LuCI/SSH 和 Doona、关闭 Honk 恢复直连。准备串口或兼容 U-Boot 的恢复路径 |
-| DNS 与分流 | 未缓存的域名、域名规则、IPv4/IPv6、DNS 超时恢复、TCP、UDP/QUIC 和调整规则后的新旧连接。`dns.routing.response` 的 fallback 不能指向与请求 fallback 相同的上游，否则 honk 报 `DNS response requery cycle` 并对所有名称返回 SERVFAIL；PPE 真机（6.18.60，beta.6）已复现并确认 `fallback: accept` 可修复 |
-| 运行与重载 | 重复修改配置和重载、WAN 重连、断网恢复、检查 restart/OOM/内核日志。先观察 24 小时，再复测 6.18 NSS 的并发内存 |
-| 边界与升级 | 从访客网和 WAN 验证 9527 不可达。同线保留升级后确认配置和管理员状态。跨线回退用对应原版并清空配置 |
+| 项目 | 实测 |
+|:---|:---|
+| 升级 | `sysupgrade -k` 后 81 秒 SSH 恢复；LAN 保持 `192.168.10.1/24` |
+| 基础功能 | DNS 5 条 A 记录，`http204=204`，`bpftool` 可用 |
+| 出厂默认 | stopped + disabled，无 Wi-Fi / USB 模块 |
+| Honk 启动 | 失败。每次启动 10–25 秒内被 OOM killer 结束，`bpf_check` 处于调用栈 |
+| 存活率 | 4 次独立启动各 45 秒：0 次存活；5 分钟观察：30 次采样中 6 次存活 |
+| 程序加载 | `bpftool prog list` 始终为 0 |
+| 停用后 | DNS、转发、管理面正常，`MemAvailable` 48 MB |
 
-Honk 对网关本机 IPv4 TCP 的兼容性及配置重载问题分别跟踪于 [#456](https://github.com/daeuniverse/honk/issues/456) 和 [#476](https://github.com/daeuniverse/honk/issues/476)。出现管理或 DNS 中断时先停止代理，根据 [安装与恢复指南](installation.md) 复核恢复路径。原版和 eBPF 版的镜像、校验值及 Release 各自独立。
+## 运行状态自查
 
-### 运行状态自查
-
-Honk 在 Linux 6.12+ 上用 TCX（`bpf_link`）挂载 TC 程序，不创建 `clsact` qdisc，也不安装传统 `tc filter`。因此镜像里没有 `tc` 命令不影响功能，`tc filter show dev br-lan` 也看不到东西——这不是故障。检查挂载状态请用镜像内置的 `bpftool`：
+Honk 在 Linux 6.12+ 上用 TCX（`bpf_link`）挂载 TC 程序，不创建 `clsact` qdisc，也不安装传统 `tc filter`。镜像里没有 `tc` 命令不影响功能，`tc filter show dev br-lan` 看不到内容属正常。
 
 ```sh
 bpftool prog list | head
@@ -79,32 +83,28 @@ bpftool map list | head
 ls /sys/fs/bpf
 ```
 
-`/sys/fs/bpf` 下的 36 个 pin 名（`CONN_STATE_MAP`、`ROUTING_POLICY_ROOT`、`LISTEN_SOCKET_MAP` 等）以及客户端 IP 的 DNS 查询出现在 `logread | grep dns_control` 里，都说明数据面已经接管。
+`/sys/fs/bpf` 下的 pin 名（`CONN_STATE_MAP`、`ROUTING_POLICY_ROOT`、`LISTEN_SOCKET_MAP` 等）和客户端 IP 的 DNS 查询出现在 `logread | grep dns_control` 里，说明数据面已接管。
 
-### 已知无害告警
-
-启动日志里会出现两条警告，都不影响转发：
+## 已知告警
 
 | 日志 | 原因 | 处理 |
-|---|---|---|
-| `LAN self-protection coverage could not be confirmed` | 上游的顾问式自检无法证明管理面可达性。上游 [#456](https://github.com/daeuniverse/honk/issues/456) 仍在跟踪；出厂 `config.dae` 没有为路由器本机地址添加显式 `direct(must)` 规则，所以必然触发。警告不会拒绝启动，也不会改写路由 | 需要来自 LAN 侧访问 9527 或 SSH 时，自行添加本机地址的 `direct(must)` 规则 |
-| `kernel UDP trace attach unavailable ... ipv4_unavailable=true ipv6_unavailable=true` | 需要 `CONFIG_FUNCTION_TRACER` 与 `CONFIG_DYNAMIC_FTRACE` 才能挂 fentry/fexit 的 UDP receive-trace fallback | 自 `LiBwrt-2026.11.22.3.1` / `ImmortalWrt-2026.11.22.3.1` 起镜像已含这两项，该告警不再出现；旧镜像仍会打印，实测 DNS 全通，属于优雅降级 |
+|:---|:---|:---|
+| `LAN self-protection coverage could not be confirmed` | 上游的顾问式自检无法证明管理面可达性，出厂 `config.dae` 没有为路由器本机地址添加显式 `direct(must)` 规则，因此必然触发。不拒绝启动，也不改写路由 | 需要从 LAN 访问 9527 或 SSH 时，自行添加本机地址的 `direct(must)` 规则 |
+| `kernel UDP trace attach unavailable` | 缺少 `CONFIG_FUNCTION_TRACER` 与 `CONFIG_DYNAMIC_FTRACE` | 自 2026-11-22 起镜像已含这两项，该告警不再出现 |
 
-### 内存占用
+## 内存占用
 
-256 MB 原厂设备上的实测（LiBwrt 6.12.116，`LiBwrt-2026.11.22.3.1`）：
+LiBwrt 6.12.116，256 MB 原厂机型：
 
 | 状态 | `MemFree` | `MemAvailable` |
 |:---|---:|---:|
-| honk 停止（出厂默认） | 63,584 kB | **85,020 kB** |
-| honk 运行稳定 | 63,640–73,716 kB | **57,000–65,500 kB** |
+| Honk 停止（出厂默认） | 63,584 kB | 85,020 kB |
+| Honk 运行稳定 | 63,640–73,716 kB | 57,000–65,500 kB |
 
-honk 的净开销为 22,068 kB RSS 加 20.1 MB BPF map memlock，但两者有重叠：honk 通过 mmap 引用 BPF 程序文本（`Mapped` 18,716 kB），这部分既计入进程 RSS 也是内核里的程序页本身，不能相加。
+Honk 占用 22 MB RSS 加 20.1 MB BPF map memlock，两者有重叠：进程通过 mmap 引用 BPF 程序文本（`Mapped` 18.7 MB），这部分既是进程 RSS 也是内核里的程序页。`VmHWM` 在两轮共 18 分钟采样里恒定 34,972 kB，map 数量恒定 46 个，没有增长。
 
-`VmHWM` 在 10 分钟（5 次 × 120 秒）、8 分钟（5 次 × 120 秒）两轮采样中恒定 34,972 kB，BPF map 数量恒定 46 个 —— 无内存泄漏。首轮 `MemAvailable` 从 64,884 降到 59,036 kB 是启动后的一次性扩散，第二轮在 57,948–59,400 kB 之间波动，`Active(file)` 恒定 22,684 kB，`Dirty`/`Writeback` 全程 0。
-
-注意 `VmSize` 72,340 kB 是 Go 运行时的虚拟地址预留，不是物理占用；zram 压缩比 5.1 倍，只占 2.5 MB 物理内存。
+`VmSize` 72 MB 是 Go 运行时的虚拟地址预留，不是物理占用。zram 压缩比 5.1 倍，只占 2.5 MB 物理内存。
 
 ## 构建来源
 
-归档实现位于 [archive/honk-doona-20261116](https://github.com/osGex0o0II/ZN-M2-No-WIFI-Builder/tree/archive/honk-doona-20261116)。本版采用固定哈希的官方 ARM64 musl stock-full 资产。镜像中保留许可证与 Doona 声明，对应源码见 [NOTICE.md](../NOTICE.md)。发布前复制本次制造镜像的 Artifact、校验和与构建清单，供验收使用。
+归档实现位于 [archive/honk-doona-20261116](https://github.com/osGex0o0II/ZN-M2-No-WIFI-Builder/tree/archive/honk-doona-20261116)。本版采用固定哈希的官方 ARM64 musl stock-full 资产。镜像中保留许可证与 Doona 声明，对应源码见 [NOTICE.md](../NOTICE.md)。

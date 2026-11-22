@@ -45,7 +45,7 @@ if bash scripts/honk-profile.sh kernel "$tmp/tree" 2>/dev/null; then
 fi
 kernel="$tmp/tree/build_dir/target-aarch64/linux-qualcommax_ipq60xx/linux-6.18"
 mkdir -p "$kernel"
-for symbol in BPF BPF_SYSCALL BPF_JIT CGROUPS CGROUP_BPF DEBUG_INFO_BTF NET_SCHED NET_CLS_ACT NET_XGRESS NET_NS; do
+for symbol in BPF BPF_SYSCALL BPF_JIT CGROUPS CGROUP_BPF DEBUG_INFO_BTF NET_SCHED NET_CLS_ACT NET_XGRESS NET_NS FUNCTION_TRACER DYNAMIC_FTRACE; do
   printf 'CONFIG_%s=y\n' "$symbol"
 done > "$kernel/.config"
 printf '__attribute__((section(".BTF"))) const char fixture[] = "fixture";\n' |
@@ -54,6 +54,14 @@ bash scripts/honk-profile.sh kernel "$tmp/tree"
 sed -i '/CONFIG_NET_XGRESS=y/d' "$kernel/.config"
 if bash scripts/honk-profile.sh kernel "$tmp/tree" 2>/dev/null; then
   echo 'Honk accepted a kernel without TCX' >&2
+  exit 1
+fi
+# Without FUNCTION_TRACER honk degrades: the UDP receive-trace fallback cannot
+# attach and every socket loses its receive-priority metadata path.
+printf 'CONFIG_NET_XGRESS=y\n' >> "$kernel/.config"
+sed -i '/CONFIG_FUNCTION_TRACER=y/d' "$kernel/.config"
+if bash scripts/honk-profile.sh kernel "$tmp/tree" 2>/dev/null; then
+  echo 'Honk accepted a kernel without the UDP receive-trace fallback' >&2
   exit 1
 fi
 

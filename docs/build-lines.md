@@ -2,33 +2,47 @@
 
 ZN-M2 No WIFI 提供四条原版构建线和三条 eBPF 测试变体。它们共享设备适配、纯有线边界和发布流程，但上游、内核与数据平面不同。
 
-## 总览
+## 原版构建线
 
 | 构建线 | Profile ID | 上游 / 分支 | 内核 | 数据平面 | 界面与代理 | 定位 |
 |---|---|---|---|---|---|---|
 | **LiBwrt 6.12 NSS** | `libwrt-25.12-nss` | `LiBwrt/LibWrt` / `25.12-nss` | 6.12 | NSS + ECM | Aurora；HomeProxy + sing-box | 主力线，成熟软件栈与 NSS 转发 |
-| **LiBwrt 6.12 NSS （eBPF）** | `libwrt-25.12-nss-ebpf` | `LiBwrt/LibWrt` / `25.12-nss` | 6.12 | NSS + ECM | Aurora；Honk + Doona | 测试，待真机验收 |
 | **ImmortalWrt 6.18 PPE** | `immortalwrt-viking-owrt-ppe` | `VIKINGYFY/immortalwrt` / `owrt` | 6.18 | PPE + EDMA | Aurora；HomeProxy + sing-box | 主力线，降低 NSS 常驻开销 |
-| **ImmortalWrt 6.18 PPE （eBPF）** | `immortalwrt-viking-owrt-ppe-ebpf` | `VIKINGYFY/immortalwrt` / `owrt` | 6.18 | PPE + EDMA | Aurora；Honk + Doona | 测试，待真机验收 |
 | **ImmortalWrt 6.18 NSS** | `immortalwrt-viking-main-nss` | `VIKINGYFY/immortalwrt` / `main` | 6.18 | NSS + ECM | Aurora；HomeProxy + sing-box | 6.18 内核与 NSS 组合 |
-| **ImmortalWrt 6.18 NSS （eBPF）** | `immortalwrt-viking-main-nss-ebpf` | `VIKINGYFY/immortalwrt` / `main` | 6.18 | NSS + ECM | Aurora；Honk + Doona | 测试，待真机验收 |
 | **FanchmWrt 6.12 FWX** | `fanchmwrt-25.12` | `osGex0o0II/FanchmWrt` / `codex/zn-m2-25.12.6` | 6.12 | FWX / Shortcut-FE | 上游原生；不包含 HomeProxy | 保留上游原生界面与包集 |
+
+## eBPF 测试变体
+
+eBPF 变体把代理从 HomeProxy + sing-box 换成 Honk + Doona，数据面走 eBPF；上游、内核、加速栈与对应原版线一致，因此只在原版线稳定后作为测试变体发布 Pre-release。
+
+| 变体 | Profile ID | 对应原版线 | 数据平面 | 真机验收 |
+|---|---|---|---|---|
+| **LiBwrt 6.12 NSS （eBPF）** | `libwrt-25.12-nss-ebpf` | LiBwrt 6.12 NSS | NSS + ECM | 2026-11-22，6.12.116 |
+| **ImmortalWrt 6.18 PPE （eBPF）** | `immortalwrt-viking-owrt-ppe-ebpf` | ImmortalWrt 6.18 PPE | PPE + EDMA | 2026-11-21，6.18.60 |
+| **ImmortalWrt 6.18 NSS （eBPF）** | `immortalwrt-viking-main-nss-ebpf` | ImmortalWrt 6.18 NSS | NSS + ECM | 待补 |
 
 Profile ID、工作流文件名和 Release tag slug 是稳定技术标识，含义与兼容规则见 [项目结构与命名](naming.md)。
 
 ## 如何选择
+
+原版线：
 
 - **需要 NSS 转发、希望软件栈成熟稳定：** 选 LiBwrt 6.12 NSS。
 - **希望降低 NSS 常驻开销、接受 PPE 数据平面：** 选 ImmortalWrt 6.18 PPE。
 - **需要 6.18 内核与 NSS 组合：** 选 ImmortalWrt 6.18 NSS。
 - **偏好上游原生 LuCI 与包集、不需要 HomeProxy：** 选 FanchmWrt 6.12 FWX。
 
+eBPF 变体：
+
+- 先确认对应的原版线满足需求，再选择同名的 （eBPF） 变体，用于试用 Honk + Doona 的 eBPF 代理。
+- eBPF 变体以 Pre-release 发布，未接入你的节点和规则前默认全部直连。
+- Honk 仍是 `0.1.0-beta.6`，不要把 eBPF 变体当作稳定主力线。
+
 全部构建线都面向纯有线配置。不同数据平面的实际差异、验证范围和性能数据见 [功能与边界](features.md) 与 [性能与内存](performance.md)。
 
 ## 验证状态
 
-- 三条 eBPF 版独立构建。固件启动、管理访问、转发分载及原厂机型稳定性均待真机验收，见 [Honk + Doona](honk-doona.md)。
-
+- 三条 eBPF 变体各自独立构建。LiBwrt（2026-11-22，6.12.116）与 ImmortalWrt PPE（2026-11-21，6.18.60）已在 256 MB 原厂设备完成真机验收：冷启动、DNS、管理面、WAN 边界与硬件分载共存均已实测；ImmortalWrt NSS 的真机验收待补。详见 [Honk + Doona](honk-doona.md)。
 - LiBwrt 6.12 NSS 与 ImmortalWrt 6.18 PPE 是长期维护的主力线，构建、发布和主要功能路径已有持续验证。
 - ImmortalWrt 6.18 NSS 与 FanchmWrt 6.12 FWX 使用共享 Profile 构建流程；已发布 Release，但不代表全部功能都已完成真机验收。
 - 所有 Release 都附构建清单、源码提交和 SHA256；构建成功不等于设备验收完成。

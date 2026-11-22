@@ -6,22 +6,22 @@ ZN-M2 No WIFI 的组件大多来自上游 OpenWrt、ImmortalWrt、LiBwrt、Fanch
 
 | 数据平面 | 使用构建线 | 加速对象 | 不加速的部分 |
 |---|---|---|---|
-| NSS + ECM | LiBwrt 6.12 NSS、ImmortalWrt 6.18 NSS | 符合条件的 IPv4 / IPv6 转发连接 | 代理进程、部分特殊流量与未命中规则的连接 |
-| PPE + EDMA | ImmortalWrt 6.18 PPE | 以太网转发路径，降低 NSS 常驻开销 | 代理进程与未命中加速路径的连接 |
+| NSS + ECM | LiBwrt 6.12 NSS、ImmortalWrt 6.18 NSS（含各自 eBPF 变体） | 符合条件的 IPv4 / IPv6 转发连接 | 代理进程、部分特殊流量与未命中规则的连接 |
+| PPE + EDMA | ImmortalWrt 6.18 PPE（含 eBPF 变体） | 以太网转发路径，降低 NSS 常驻开销 | 代理进程与未命中加速路径的连接 |
 | FWX / Shortcut-FE | FanchmWrt 6.12 FWX | 上游支持的转发快路径 | 代理进程与上游未覆盖的连接 |
 
-硬件加速解决的是“转发”而不是“代理”。HomeProxy / sing-box 的流量仍要经过 CPU，不能用直连吞吐量推断代理性能。
+硬件加速解决的是“转发”而不是“代理”。HomeProxy / sing-box 与 Honk / Doona 的流量仍要经过 CPU，不能用直连吞吐量推断代理性能。
 
 ## 软件与插件
 
-| 能力 | 三条 Aurora 线（LiBwrt / PPE / Viking NSS） | FanchmWrt 6.12 FWX |
-|---|---|---|
-| 管理界面 | Aurora + 简体中文 | 上游原生界面 |
-| 代理 | HomeProxy + sing-box | 不包含 HomeProxy，以上游包集为准 |
-| 远程接入 | ZeroTier、WoL、UPnP | 以上游包集为准 |
-| 运维 | ttyd、autoreboot、gecoosac、package-manager | 以上游包集为准 |
-| 内存压缩 | ZRAM，`lzo-rle` | 以上游配置为准 |
-| 默认值 | 健康检查、UCI 迁移、LuCI 端口顺序 | 以 FanchmWrt 适配为准 |
+| 能力 | 三条 Aurora 原版线（LiBwrt / PPE / Viking NSS） | 三条 eBPF 变体 | FanchmWrt 6.12 FWX |
+|---|---|---|---|
+| 管理界面 | Aurora + 简体中文 | Aurora + 简体中文 | 上游原生界面 |
+| 代理 | HomeProxy + sing-box | Honk + Doona（eBPF，出厂停用） | 不包含 HomeProxy，以上游包集为准 |
+| 远程接入 | ZeroTier、WoL、UPnP | ZeroTier、WoL、UPnP | 以上游包集为准 |
+| 运维 | ttyd、autoreboot、gecoosac、package-manager | ttyd、autoreboot、gecoosac、package-manager | 以上游包集为准 |
+| 内存压缩 | ZRAM，`lzo-rle` | ZRAM，`lzo-rle` | 以上游配置为准 |
+| 默认值 | 健康检查、UCI 迁移、LuCI 端口顺序 | 健康检查、UCI 迁移、LuCI 端口顺序 | 以 FanchmWrt 适配为准 |
 
 具体软件版本以对应 Release 的构建清单和 rootfs manifest 为准；不同构建线不保证包集完全一致。
 
@@ -41,12 +41,13 @@ ZN-M2 No WIFI 的组件大多来自上游 OpenWrt、ImmortalWrt、LiBwrt、Fanch
 |---|---|---|
 | 内核、驱动、数据平面 | OpenWrt / ImmortalWrt / LiBwrt / FanchmWrt | 选型、固定提交、适配 DTS 与镜像 |
 | LuCI、HomeProxy、sing-box | 上游与 VIKINGYFY 软件源 | 选择包源、固定版本、默认配置、集成验证 |
-| 构建 | 上游 SDK / ImageBuilder 流程 | 四条构建线、缓存、构建清单、发布门禁 |
+| Honk、Doona | 上游发布物 | 固定版本与哈希、eBPF 内核选项、出厂配置与真机验证 |
+| 构建 | 上游 SDK / ImageBuilder 流程 | 四条原版线、三条 eBPF 变体、缓存、构建清单、发布门禁 |
 | 发布 | GitHub Releases | 资产命名、SHA256、发布说明、保留策略 |
 
 ## 交付
 
-- 四条构建线各自有独立工作流与发布流程。
+- 四条原版线各自有独立工作流与发布流程；三条 eBPF 变体在对应原版线的基线上单独构建，以 Pre-release 发布。
 - 每次构建生成 `BUILD-MANIFEST.txt`，记录上游仓库、分支、提交、内核、配置与适配器哈希。
 - Release 附带 factory / sysupgrade 镜像与 SHA256；发布门禁要求构建成功、资产校验通过。
 - 发布说明区分“构建完成”和“真机验收完成”，不把前者写成后者。

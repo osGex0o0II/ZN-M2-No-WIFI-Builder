@@ -227,11 +227,18 @@ libwrt-25.12-nss-ebpf|immortalwrt-viking-owrt-ppe-ebpf|immortalwrt-viking-main-n
 	esac
 	kernel=6.18
 	if [ "$profile" = libwrt-25.12-nss-ebpf ]; then kernel=6.12; fi
+	# Only these two lines have completed device validation; the Viking NSS
+	# variant still ships as an unvalidated test build.
+	case "$profile" in
+	libwrt-25.12-nss-ebpf) validation="2026-11-22 已在 256 MB 原厂设备完成真机验收（内核 6.12.116）";;
+	immortalwrt-viking-owrt-ppe-ebpf) validation="2026-11-21 已在 256 MB 原厂设备完成真机验收（内核 6.18.60）";;
+	*) validation="测试版，待真机验收";;
+	esac
 	cat <<EOF
 
 ## ${PROFILE_TITLE} 固件
 
-测试版，待真机验收。适用于 ZN-M2 纯有线配置，Linux ${kernel}，转发加速为 ${acceleration}。
+${validation}。适用于 ZN-M2 纯有线配置，Linux ${kernel}，转发加速为 ${acceleration}。
 
 ### Honk + Doona
 

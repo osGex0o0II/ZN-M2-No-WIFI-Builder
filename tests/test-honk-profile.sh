@@ -39,13 +39,27 @@ if bash scripts/honk-profile.sh config "$tmp/tree" 2>/dev/null; then
   echo 'Honk accepted an injected sing-box module' >&2
   exit 1
 fi
+sed -i '/^CONFIG_PACKAGE_sing-box=m$/d' "$tmp/tree/.config"
+# bpftool is a variant package: only bpftool-minimal/bpftool-full exist, so a
+# bare CONFIG_PACKAGE_bpftool=y is silently dropped by defconfig and the image
+# ships without the only tool that can read TCX links and pinned maps back out.
+if grep -Eq '^CONFIG_PACKAGE_bpftool=' configs/honk-ebpf.config; then
+  echo 'Honk fragment selects the non-existent bare bpftool symbol' >&2
+  exit 1
+fi
+sed -i '/^CONFIG_PACKAGE_bpftool-minimal=y$/d' "$tmp/tree/.config"
+if bash scripts/honk-profile.sh config "$tmp/tree" 2>/dev/null; then
+  echo 'Honk accepted a tree without bpftool' >&2
+  exit 1
+fi
+printf 'CONFIG_PACKAGE_bpftool-minimal=y\n' >> "$tmp/tree/.config"
 if bash scripts/honk-profile.sh kernel "$tmp/tree" 2>/dev/null; then
   echo 'Honk accepted a missing kernel' >&2
   exit 1
 fi
 kernel="$tmp/tree/build_dir/target-aarch64/linux-qualcommax_ipq60xx/linux-6.18"
 mkdir -p "$kernel"
-for symbol in BPF BPF_SYSCALL BPF_JIT CGROUPS CGROUP_BPF DEBUG_INFO_BTF NET_SCHED NET_CLS_ACT NET_XGRESS NET_NS; do
+for symbol in BPF BPF_SYSCALL BPF_JIT CGROUPS CGROUP_BPF DEBUG_INFO_BTF NET_SCHED NET_CLS_ACT NET_XGRESS NET_NS FUNCTION_TRACER DYNAMIC_FTRACE; do
   printf 'CONFIG_%s=y\n' "$symbol"
 done > "$kernel/.config"
 printf '__attribute__((section(".BTF"))) const char fixture[] = "fixture";\n' |
@@ -54,6 +68,14 @@ bash scripts/honk-profile.sh kernel "$tmp/tree"
 sed -i '/CONFIG_NET_XGRESS=y/d' "$kernel/.config"
 if bash scripts/honk-profile.sh kernel "$tmp/tree" 2>/dev/null; then
   echo 'Honk accepted a kernel without TCX' >&2
+  exit 1
+fi
+# Without FUNCTION_TRACER honk degrades: the UDP receive-trace fallback cannot
+# attach and every socket loses its receive-priority metadata path.
+printf 'CONFIG_NET_XGRESS=y\n' >> "$kernel/.config"
+sed -i '/CONFIG_FUNCTION_TRACER=y/d' "$kernel/.config"
+if bash scripts/honk-profile.sh kernel "$tmp/tree" 2>/dev/null; then
+  echo 'Honk accepted a kernel without the UDP receive-trace fallback' >&2
   exit 1
 fi
 

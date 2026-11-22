@@ -53,6 +53,27 @@ LiBwrt 6.12 NSS、ImmortalWrt 6.18 PPE、ImmortalWrt 6.18 NSS 都有独立 eBPF 
 
 Honk 对网关本机 IPv4 TCP 的兼容性及配置重载问题分别跟踪于 [#456](https://github.com/daeuniverse/honk/issues/456) 和 [#476](https://github.com/daeuniverse/honk/issues/476)。出现管理或 DNS 中断时先停止代理，根据 [安装与恢复指南](installation.md) 复核恢复路径。原版和 eBPF 版的镜像、校验值及 Release 各自独立。
 
+### 运行状态自查
+
+Honk 在 Linux 6.12+ 上用 TCX（`bpf_link`）挂载 TC 程序，不创建 `clsact` qdisc，也不安装传统 `tc filter`。因此镜像里没有 `tc` 命令不影响功能，`tc filter show dev br-lan` 也看不到东西——这不是故障。检查挂载状态请用镜像内置的 `bpftool`：
+
+```sh
+bpftool prog list | head
+bpftool map list | head
+ls /sys/fs/bpf
+```
+
+`/sys/fs/bpf` 下的 36 个 pin 名（`CONN_STATE_MAP`、`ROUTING_POLICY_ROOT`、`LISTEN_SOCKET_MAP` 等）以及客户端 IP 的 DNS 查询出现在 `logread | grep dns_control` 里，都说明数据面已经接管。
+
+### 已知无害告警
+
+启动日志里会出现两条警告，都不影响转发：
+
+| 日志 | 原因 | 处理 |
+|---|---|---|
+| `LAN self-protection coverage could not be confirmed` | 上游的顾问式自检无法证明管理面可达性。上游 [#456](https://github.com/daeuniverse/honk/issues/456) 仍在跟踪；出厂 `config.dae` 没有为路由器本机地址添加显式 `direct(must)` 规则，所以必然触发。警告不会拒绝启动，也不会改写路由 | 需要来自 LAN 侧访问 9527 或 SSH 时，自行添加本机地址的 `direct(must)` 规则 |
+| `kernel UDP trace attach unavailable ... ipv4_unavailable=true ipv6_unavailable=true` | 需要 `CONFIG_FUNCTION_TRACER` 与 `CONFIG_DYNAMIC_FTRACE` 才能挂 fentry/fexit 的 UDP receive-trace fallback | 当前镜像已在 `configs/honk-ebpf.config` 打开这两项；旧镜像仍会打印该警告，实测 DNS 全通，属于优雅降级 |
+
 ## 构建来源
 
 归档实现位于 [archive/honk-doona-20261116](https://github.com/osGex0o0II/ZN-M2-No-WIFI-Builder/tree/archive/honk-doona-20261116)。本版采用固定哈希的官方 ARM64 musl stock-full 资产。镜像中保留许可证与 Doona 声明，对应源码见 [NOTICE.md](../NOTICE.md)。发布前复制本次制造镜像的 Artifact、校验和与构建清单，供验收使用。

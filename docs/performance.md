@@ -46,8 +46,29 @@ ZRAM 将交换页面压缩存放于 RAM，并非不占物理内存。压缩比�
 - **PPE + EDMA**：使用流量分载及相关硬件；需通过现场计数器验证是否命中。
 - **FWX / Shortcut-FE**：遵循对应上游的快速转发实现，不等同于 NSS 硬件分载。
 - **HomeProxy / sing-box**：代理处理通常需要 CPU 和用户态参与，不能以直连转发结果代表代理性能。
+- **Honk / Doona（eBPF）**：数据面在 eBPF 里完成，用户态只处理策略与连接建立。PPE 与 NSS 的 eBPF 变体与原有硬件分载共存，实测分载计数在 honk 运行时继续增长。
 
 硬件分载可能影响部分依赖逐包处理的 QoS、计数和防火墙扩展规则。若需要逐连接管控，应在实际流量下验证规则是否生效；必要时关闭分载。
+
+## eBPF 变体的内存基线
+
+LiBwrt 6.12.116 eBPF 镜像在 256 MB 原厂设备上的实测（honk 0.1.0-beta.6）：
+
+| 项目 | honk 停止 | honk 运行 |
+|:---|---:|---:|
+| `MemTotal` | 194,052 kB | 194,052 kB |
+| `MemFree` | 63,584 kB | 63,640–73,716 kB |
+| `MemAvailable` | 85,020 kB | 57,000–65,500 kB |
+| `AnonPages` | 1,216 kB | 5,688–6,532 kB |
+| `Slab` / `SUnreclaim` | 35,204 / 27,596 kB | 33,060 / 25,372 kB |
+| `SwapFree` | 91,792 kB | 91,704 kB |
+| honk VmRSS / VmHWM | — | 21.6–22.1 MB / 34,972 kB |
+| honk 线程 | — | 14–16 |
+| BPF map 数量 / memlock | — | 46 个 / 20.1 MB |
+
+`VmHWM` 与 BPF map 数量在两轮共 18 分钟的采样里恒定，无增长趋势。表中 `Slab` 因 eBPF 程序页使 `Mapped` 上升而略有下降，不是泄漏。
+
+eBPF 变体比 HomeProxy 版省内存：`MemTotal` 从 214,520 kB 降到 194,052 kB（镜像不含 sing-box 与 Wi-Fi/USB 驱动），honk 停止时可用内存约 85 MB，而 HomeProxy 版长期在 43–46 MB。
 
 ## 后续测试记录
 

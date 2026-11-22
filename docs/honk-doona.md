@@ -4,6 +4,8 @@ LiBwrt 6.12 NSS、ImmortalWrt 6.18 PPE、ImmortalWrt 6.18 NSS 都有独立 eBPF 
 
 三条线已完成静态验收（包集合、内核 eBPF 开关、Honk 资产哈希、镜像内配置）。PPE 与 LiBwrt 已在 256 MB 原厂设备完成真机验收；ImmortalWrt NSS 的真机验收待补。
 
+2026-11-22 的两条修复让出厂镜像可以直接使用：`dns.routing.response` 改为 `fallback: accept`，以及镜像内置 `bpftool`、内核打开 `CONFIG_FUNCTION_TRACER`/`CONFIG_DYNAMIC_FTRACE`。此前所有 eBPF 镜像都不带 `bpftool`，UDP receive-trace 也一直降级。
+
 ## 启停与管理
 
 - 出厂默认停止 Honk。先保存现有配置和原版镜像，通过 LuCI「服务 → Honk 代理」显式启动。确认管理连接正常后再选择开机自启。
@@ -44,6 +46,20 @@ LiBwrt 6.12 NSS、ImmortalWrt 6.18 PPE、ImmortalWrt 6.18 NSS 都有独立 eBPF 
 
 两条线共同的结论：eBPF 数据面与原有硬件加速共存，honk 停掉后转发立即回到原始路径；出厂默认不启动 honk，也不会在升级后自行启用。
 
+**LiBwrt 复验（2026-11-22，`LiBwrt-2026.11.22.3.1-ZN_M2-NOWIFI-6.12-NSS-ebpf`，内核 6.12.116）——本轮修复的验收**：
+
+| 项目 | 实测 |
+|---|---|
+| `bpftool` | `/usr/sbin/bpftool -> /usr/libexec/bpftool-minimal`（536,592 B），`bpftool prog list` / `map list` 正常 |
+| ftrace | `CONFIG_FUNCTION_TRACER=y`、`CONFIG_DYNAMIC_FTRACE=y`，`/sys/kernel/tracing` 存在 |
+| UDP receive trace | 加载 5 个 tracing 程序（`honk_udp_receive_{candidate,enter,exit}`、`honk_udp6_receive_{enter,exit}`），`UDP receive trace unavailable` 告警 **0 条**（修复前每次启动必报） |
+| 镜像一致性 | `/etc/honk/config.dae` 与 `/rom` 副本 sha256 一致 `eabf49a1...`；`bpftool-minimal` 与 `honk-core` 哈希与镜像内文件逐字节相同 |
+| DNS | honk 运行中 3 轮 × 8 秒采样全部 5 条 A 记录；路由器直连 223.5.5.5 与 1.1.1.1 均通 |
+| 边界 | WAN 侧 22 / 80 / 9527 全部拒绝；LAN 侧 9527 可达 |
+| 出厂默认 | honk stopped + disabled，`/etc/rc.d` 无链接 |
+
+同一次验收确认 `sysupgrade -k` 会保留上一版的 `/etc/honk/config.dae`（本轮保留了手工调成 `log_level: debug` 的版本），升级后需要与 `/rom/etc/honk/config.dae` 对比后决定是否采用新版默认。
+
 | 项目 | 验收内容 |
 |---|---|
 | 首次启动和可恢复性 | 冷启动、首次获得 DHCP、LuCI/SSH 和 Doona、关闭 Honk 恢复直连。准备串口或兼容 U-Boot 的恢复路径 |
@@ -72,7 +88,22 @@ ls /sys/fs/bpf
 | 日志 | 原因 | 处理 |
 |---|---|---|
 | `LAN self-protection coverage could not be confirmed` | 上游的顾问式自检无法证明管理面可达性。上游 [#456](https://github.com/daeuniverse/honk/issues/456) 仍在跟踪；出厂 `config.dae` 没有为路由器本机地址添加显式 `direct(must)` 规则，所以必然触发。警告不会拒绝启动，也不会改写路由 | 需要来自 LAN 侧访问 9527 或 SSH 时，自行添加本机地址的 `direct(must)` 规则 |
-| `kernel UDP trace attach unavailable ... ipv4_unavailable=true ipv6_unavailable=true` | 需要 `CONFIG_FUNCTION_TRACER` 与 `CONFIG_DYNAMIC_FTRACE` 才能挂 fentry/fexit 的 UDP receive-trace fallback | 当前镜像已在 `configs/honk-ebpf.config` 打开这两项；旧镜像仍会打印该警告，实测 DNS 全通，属于优雅降级 |
+| `kernel UDP trace attach unavailable ... ipv4_unavailable=true ipv6_unavailable=true` | 需要 `CONFIG_FUNCTION_TRACER` 与 `CONFIG_DYNAMIC_FTRACE` 才能挂 fentry/fexit 的 UDP receive-trace fallback | 自 `LiBwrt-2026.11.22.3.1` / `ImmortalWrt-2026.11.22.3.1` 起镜像已含这两项，该告警不再出现；旧镜像仍会打印，实测 DNS 全通，属于优雅降级 |
+
+### 内存占用
+
+256 MB 原厂设备上的实测（LiBwrt 6.12.116，`LiBwrt-2026.11.22.3.1`）：
+
+| 状态 | `MemFree` | `MemAvailable` |
+|:---|---:|---:|
+| honk 停止（出厂默认） | 63,584 kB | **85,020 kB** |
+| honk 运行稳定 | 63,640–73,716 kB | **57,000–65,500 kB** |
+
+honk 的净开销为 22,068 kB RSS 加 20.1 MB BPF map memlock，但两者有重叠：honk 通过 mmap 引用 BPF 程序文本（`Mapped` 18,716 kB），这部分既计入进程 RSS 也是内核里的程序页本身，不能相加。
+
+`VmHWM` 在 10 分钟（5 次 × 120 秒）、8 分钟（5 次 × 120 秒）两轮采样中恒定 34,972 kB，BPF map 数量恒定 46 个 —— 无内存泄漏。首轮 `MemAvailable` 从 64,884 降到 59,036 kB 是启动后的一次性扩散，第二轮在 57,948–59,400 kB 之间波动，`Active(file)` 恒定 22,684 kB，`Dirty`/`Writeback` 全程 0。
+
+注意 `VmSize` 72,340 kB 是 Go 运行时的虚拟地址预留，不是物理占用；zram 压缩比 5.1 倍，只占 2.5 MB 物理内存。
 
 ## 构建来源
 

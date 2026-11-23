@@ -9,6 +9,9 @@
 CONFIG_DIR="${ZN_M2_CONFIG_DIR:-/etc/config}"
 INIT_DIR="${ZN_M2_INIT_DIR:-/etc/init.d}"
 dnsmasq_d="${ZN_M2_DNSMASQ_D:-/etc/dnsmasq.d}"
+nft_dir="${ZN_M2_NFTABLES_D:-/etc/nftables.d}"
+cron_spool="${ZN_M2_CRON_SPOOL:-/etc/crontabs/root}"
+homeproxy_dir="${ZN_M2_HOMEPROXY_DIR:-/etc/homeproxy}"
 rc=0
 
 pkg_installed() {
@@ -73,10 +76,43 @@ fi
 # confdir and expects sing-box to answer on that port. On an image without
 # homeproxy/sing-box nothing listens there, so every name fails to resolve and
 # dnsmasq cannot recover on its own.
-if [ ! -x "${INIT_DIR}/homeproxy" ] && ! pkg_installed luci-app-homeproxy &&
-	! pkg_installed sing-box; then
+#
+# The same removal drops the firewall include that points at
+# /var/run/homeproxy/fw4_input.nft and the nft fragment sing-box installs in
+# /etc/nftables.d. A fresh boot recreates neither, but a preserved /etc keeps
+# them and fw4 warns "unreachable path" on every reload.
+proxy_orphaned() {
+	[ -x "${INIT_DIR}/homeproxy" ] && return 1
+	pkg_installed luci-app-homeproxy && return 1
+	pkg_installed sing-box && return 1
+	return 0
+}
+
+if proxy_orphaned; then
 	rm -f "${dnsmasq_d}/dnsmasq-homeproxy.conf" || rc=1
 	rm -rf "${dnsmasq_d}/dnsmasq-homeproxy.d" || rc=1
+	rm -f "${nft_dir}/0-sing-box-auto-redirect.nft" || rc=1
+
+	# fw4 include sections that reference the removed proxy runtime.
+	if command -v uci >/dev/null 2>&1; then
+		for section in $(uci -q show firewall 2>/dev/null |
+			sed -n 's/^firewall\.\([^.=]*\)=include$/\1/p'); do
+			case "$section" in
+				homeproxy* | singbox* | sing-box*)
+					uci -q delete "firewall.${section}" || rc=1
+					;;
+			esac
+		done
+		uci -q commit firewall >/dev/null 2>&1 || true
+	fi
+
+	# The proxy package installs a cron entry that calls a helper it owned.
+	if [ -f "$cron_spool" ] && [ ! -d "$homeproxy_dir" ]; then
+		if grep -q 'homeproxy_autosetup' "$cron_spool"; then
+			grep -v 'homeproxy_autosetup' "$cron_spool" > "${cron_spool}.zn-m2" &&
+				mv -f "${cron_spool}.zn-m2" "$cron_spool" || rc=1
+		fi
+	fi
 fi
 
 exit "$rc"

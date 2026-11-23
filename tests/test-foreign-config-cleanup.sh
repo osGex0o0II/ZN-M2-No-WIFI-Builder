@@ -14,8 +14,9 @@ cleanup="$repo_root/files-shared/etc/uci-defaults/96-clean-foreign-config.sh"
 
 workdir="$(mktemp -d)"
 trap 'rm -rf "$workdir"' EXIT HUP INT TERM
-mkdir -p "$workdir/bin" "$workdir/config" "$workdir/init.d" \
-	"$workdir/dnsmasq.d/dnsmasq-ssrplus.d" "$workdir/dnsmasq.d/dnsmasq-homeproxy.d"
+mkdir -p "$workdir/bin" "$workdir/config" "$workdir/init.d" "$workdir/crontabs" \
+	"$workdir/dnsmasq.d/dnsmasq-ssrplus.d" "$workdir/dnsmasq.d/dnsmasq-homeproxy.d" \
+	"$workdir/nftables.d"
 
 # apk stub: only 3proxy and luci-app-oui are installed. oui has no init script,
 # so the package-name guard is the only thing keeping its config alive.
@@ -27,6 +28,41 @@ luci-app-oui-1.2.3-r1 aarch64_cortex-a53 {feeds/luci/applications/luci-app-oui} 
 LIST
 EOF
 chmod +x "$workdir/bin/apk"
+
+# uci stub over a flat file of `config.section=type` / `config.section.option=value`
+# lines, which is all the cleanup needs to find and delete firewall includes.
+cat > "$workdir/bin/uci" <<'EOF'
+#!/bin/sh
+db="${UCI_DB:?}"
+[ "$1" = "-q" ] && shift
+case "$1" in
+show)
+	[ "$2" = firewall ] || exit 1
+	cat "$db"
+	;;
+delete)
+	key="${2#firewall.}"
+	grep -v -e "^firewall\.${key}\." -e "^firewall\.${key}=" "$db" > "${db}.new" || true
+	mv -f "${db}.new" "$db"
+	;;
+commit) : ;;
+*) exit 1 ;;
+esac
+EOF
+chmod +x "$workdir/bin/uci"
+cat > "$workdir/firewall.uci" <<'EOF'
+firewall.homeproxy_input=include
+firewall.homeproxy_input.path=/var/run/homeproxy/fw4_input.nft
+firewall.zerotier_input=include
+firewall.zerotier_input.path=/var/run/zerotier-one/_fw4/input.nft
+EOF
+: > "$workdir/crontabs/root"
+printf '%s\n' '0 */6 * * * /etc/homeproxy/scripts/update_crond.sh #homeproxy_autosetup' \
+	'*/10 * * * * /usr/sbin/zn-m2-healthcheck' > "$workdir/crontabs/root"
+printf '%s\n' 'chain input { type filter hook input priority filter; policy accept; }' \
+	> "$workdir/nftables.d/0-sing-box-auto-redirect.nft"
+printf '%s\n' 'chain zn_m2_honk_input { type filter hook input priority filter - 10; policy accept; }' \
+	> "$workdir/nftables.d/30-zn-m2-honk.nft"
 
 for stale in 3proxy shadowsocksr vlmcsd vsftpd microsocks nlbwmon oui arpbind appfilter homeproxy sing-box; do
 	: > "$workdir/config/$stale"
@@ -43,9 +79,13 @@ printf '%s\n' 'no-resolv' > "$workdir/dnsmasq.d/dnsmasq-homeproxy.conf"
 printf '%s\n' 'server=127.0.0.1#5333' > "$workdir/dnsmasq.d/dnsmasq-homeproxy.d/redirect-dns.conf"
 
 PATH="$workdir/bin:$PATH" \
+UCI_DB="$workdir/firewall.uci" \
 ZN_M2_CONFIG_DIR="$workdir/config" \
 ZN_M2_INIT_DIR="$workdir/init.d" \
 ZN_M2_DNSMASQ_D="$workdir/dnsmasq.d" \
+ZN_M2_NFTABLES_D="$workdir/nftables.d" \
+ZN_M2_CRON_SPOOL="$workdir/crontabs/root" \
+ZN_M2_HOMEPROXY_DIR="$workdir/no-homeproxy" \
 	sh "$cleanup"
 
 for keep in 3proxy oui; do
@@ -74,6 +114,33 @@ done
 }
 [ ! -d "$workdir/dnsmasq.d/dnsmasq-homeproxy.d" ] || {
 	echo "FAIL: homeproxy dnsmasq directory was kept" >&2
+	exit 1
+}
+# The sing-box nft fragment and the fw4 include that points at its runtime
+# directory must go with the package, or every fw4 reload warns about a path
+# that will never exist again.
+[ ! -e "$workdir/nftables.d/0-sing-box-auto-redirect.nft" ] || {
+	echo "FAIL: sing-box nft fragment was kept" >&2
+	exit 1
+}
+[ -e "$workdir/nftables.d/30-zn-m2-honk.nft" ] || {
+	echo "FAIL: the image's own nft fragment was removed" >&2
+	exit 1
+}
+grep -q 'homeproxy_input' "$workdir/firewall.uci" && {
+	echo "FAIL: homeproxy firewall include was kept" >&2
+	exit 1
+}
+grep -q 'zerotier_input' "$workdir/firewall.uci" || {
+	echo "FAIL: an unrelated firewall include was removed" >&2
+	exit 1
+}
+grep -q 'homeproxy_autosetup' "$workdir/crontabs/root" && {
+	echo "FAIL: homeproxy cron entry was kept" >&2
+	exit 1
+}
+grep -q 'zn-m2-healthcheck' "$workdir/crontabs/root" || {
+	echo "FAIL: an unrelated cron entry was removed" >&2
 	exit 1
 }
 
@@ -105,8 +172,14 @@ ZN_M2_DNSMASQ_D="$workdir/dnsmasq.d" \
 	exit 1
 }
 
-# homeproxy keeps its config and dnsmasq fragment while the package is present.
+# homeproxy keeps its config, dnsmasq fragment, nft fragment and cron entry
+# while the package is present.
 printf '%s\n' 'no-resolv' > "$workdir/dnsmasq.d/dnsmasq-homeproxy.conf"
+printf '%s\n' 'chain input { }' > "$workdir/nftables.d/0-sing-box-auto-redirect.nft"
+printf '%s\n' 'firewall.homeproxy_input=include' \
+	> "$workdir/firewall.uci"
+printf '%s\n' '0 */6 * * * /etc/homeproxy/scripts/update_crond.sh #homeproxy_autosetup' \
+	> "$workdir/crontabs/root"
 : > "$workdir/config/homeproxy"
 cat > "$workdir/bin/apk" <<'EOF'
 #!/bin/sh
@@ -117,9 +190,13 @@ LIST
 EOF
 chmod +x "$workdir/bin/apk"
 PATH="$workdir/bin:$PATH" \
+UCI_DB="$workdir/firewall.uci" \
 ZN_M2_CONFIG_DIR="$workdir/config" \
 ZN_M2_INIT_DIR="$workdir/init.d" \
 ZN_M2_DNSMASQ_D="$workdir/dnsmasq.d" \
+ZN_M2_NFTABLES_D="$workdir/nftables.d" \
+ZN_M2_CRON_SPOOL="$workdir/crontabs/root" \
+ZN_M2_HOMEPROXY_DIR="$workdir/no-homeproxy" \
 	sh "$cleanup"
 [ -e "$workdir/dnsmasq.d/dnsmasq-homeproxy.conf" ] || {
 	echo "FAIL: homeproxy drop-in was removed while the package is installed" >&2
@@ -127,6 +204,18 @@ ZN_M2_DNSMASQ_D="$workdir/dnsmasq.d" \
 }
 [ -e "$workdir/config/homeproxy" ] || {
 	echo "FAIL: homeproxy config was removed while the package is installed" >&2
+	exit 1
+}
+[ -e "$workdir/nftables.d/0-sing-box-auto-redirect.nft" ] || {
+	echo "FAIL: sing-box nft fragment was removed while the package is installed" >&2
+	exit 1
+}
+grep -q 'homeproxy_input' "$workdir/firewall.uci" || {
+	echo "FAIL: homeproxy firewall include was removed while the package is installed" >&2
+	exit 1
+}
+grep -q 'homeproxy_autosetup' "$workdir/crontabs/root" || {
+	echo "FAIL: homeproxy cron entry was removed while the package is installed" >&2
 	exit 1
 }
 
@@ -138,9 +227,13 @@ EOF
 chmod +x "$workdir/bin/apk"
 : > "$workdir/config/vsftpd"
 PATH="$workdir/bin:$PATH" \
+UCI_DB="$workdir/firewall.uci" \
 ZN_M2_CONFIG_DIR="$workdir/config" \
 ZN_M2_INIT_DIR="$workdir/init.d" \
 ZN_M2_DNSMASQ_D="$workdir/dnsmasq.d" \
+ZN_M2_NFTABLES_D="$workdir/nftables.d" \
+ZN_M2_CRON_SPOOL="$workdir/crontabs/root" \
+ZN_M2_HOMEPROXY_DIR="$workdir/no-homeproxy" \
 	sh "$cleanup"
 [ -e "$workdir/config/vsftpd" ] || {
 	echo "FAIL: configs were removed while the package database was unreadable" >&2

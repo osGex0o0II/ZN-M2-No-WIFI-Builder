@@ -337,6 +337,25 @@ grep -Fq 'name: Verify affected Viking NSS profile' "$WF_256" ||
   fail "Viking profile changes are not built before merge"
 grep -Fq 'name: Verify affected FanchmWrt FWX profile' "$WF_256" ||
   fail "FanchmWrt profile changes are not built before merge"
+
+# /usr/sbin/zn-m2-diagnostics reads /etc/zn-m2-build-profile first and skips the
+# whole block when it is absent. scripts/profile-build.sh writes it for the
+# shared profile lines, so the two mature workflows must write the same four
+# keys or their diagnostics output silently loses profile/software_policy.
+for pair in \
+  "$WF_256|nss" \
+  "$WF_618|ppe"; do
+  workflow="${pair%%|*}"
+  policy="${pair#*|}"
+  if ! grep -Fq 'files/etc/zn-m2-build-profile' "$workflow"; then
+    fail "$(basename "$workflow") does not write /etc/zn-m2-build-profile"
+  fi
+  grep -Fq "printf 'acceleration_policy=%s\\n' $policy" "$workflow" ||
+    fail "$(basename "$workflow") writes the wrong acceleration_policy into the build profile"
+  grep -Fq "printf 'validation=pending-device\\n'" "$workflow" ||
+    fail "$(basename "$workflow") does not mark the build profile as pending device validation"
+done
+
 grep -Fq 'workflow_call:' "$ROOT_DIR/.github/workflows/build-profile.yml" ||
   fail "Viking and FanchmWrt reusable build workflow missing"
 test -f "$ROOT_DIR/.github/workflows/pr-validation.yml" ||

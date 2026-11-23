@@ -479,6 +479,15 @@ jobs:
           bash scripts/load-profile.sh "$PROFILE_ID" > "$RUNNER_TEMP/build-profile.env"
           grep -qx 'ACCELERATION_POLICY=nss' "$RUNNER_TEMP/build-profile.env"
           printf '%s\n' nss > "$OPENWRT_PATH/files/etc/zn-m2-acceleration-policy"
+          # /usr/sbin/zn-m2-diagnostics prints this file first; the shared
+          # profile builder writes the same four keys, so keep both paths in
+          # step or the diagnostics output differs per build line.
+          {
+            printf 'profile=%s\n' "$(sed -n 's/^PROFILE_ID=//p' "$RUNNER_TEMP/build-profile.env")"
+            printf 'acceleration_policy=%s\n' nss
+            printf 'software_policy=%s\n' "$(sed -n 's/^SOFTWARE_POLICY=//p' "$RUNNER_TEMP/build-profile.env")"
+            printf 'validation=pending-device\n'
+          } > "$OPENWRT_PATH/files/etc/zn-m2-build-profile"
           cp "$CONFIG_FILE" "$OPENWRT_PATH/.config"
           dos2unix "$DIY_SCRIPT"
           chmod +x "$DIY_SCRIPT"

@@ -20,6 +20,26 @@ ImmortalWrt 6.18 NSS 曾在 2026-11-22 试制同名变体，实测无法在 256 
 - 规则文件为 `/etc/honk/config.dae`，管理员状态在 `/etc/honk/data/`。同线保留配置升级后复核这两个位置。
 - `sysupgrade -k` 保留 `/etc/honk/config.dae`。手工改过该文件后，升级会继续沿用旧内容；需要出厂默认值时执行 `cp /rom/etc/honk/config.dae /etc/honk/config.dae` 后重启 Honk。
 
+## Doona 未启用的功能
+
+Doona 的「系统状态」会列出后端声明但不满足前置条件的功能。镜像出厂配置下会出现三类提示，都是有意为之，不是故障。
+
+| 提示 | 原因 | 解决办法 |
+|:---|:---|:---|
+| 导入、修订历史（需要启动参数） | 镜像以 `--store file` 启动。修订历史、导入和回滚写进 `<data_dir>/state/honk.db`，需要 `--store db`。文件模式只能导出。 | 把 `/etc/config/honk` 的 `store` 改成 `db` 后重启 Honk，见下方说明。 |
+| 无法更新地理数据 | 出厂 `config.dae` 没有 `assets { geodata { ... } }`，两个 `geodata` 资产没有 HTTP(S) 来源，因此无法下载。`geodata` 设置本身还需要一个可写的状态数据库。 | 在 `assets.geodata` 写明 `geoip`/`geosite` 的 URL，重启 Honk；`settings` 里的来源和计划另需 `--store db`。 |
+| 流程记录只在查看时记录 | `experimental.native_api.record_flows` 默认 `true`，但只在有客户端持有流诊断需求时记录；没有客户端就不保留。 | 在「设置 → 临时运行时覆盖」把流记录显式设为 `on`，或保持页面打开。 |
+
+`--store db` 会把受管理的 `.dae` 源存进 `<data_dir>/state/honk.db`。启用前先确认：
+
+- `global.data_dir` 与 `--data-dir` 必须一致（本镜像均为 `/etc/honk/data`）。
+- 数据库为空时，启动会从 `-c` 导入一次。这一步要求 `native_api.enabled` 与 `config_write` 都为真，并且已经配置凭据——本镜像已满足。
+- 导入时会剥离 `native_api`/`clash_api` 里的 `secret:`。本镜像用的是 `password_auth`，不受影响。
+- 数据库模式不支持 Clash API；本镜像没有 `clash_api`，不受影响。
+- 最多保留 50 个修订、共 16 MiB。`/etc/honk/data` 位于 `/overlay`，出厂余量约 46 MB。
+- 回退到文件模式只需把 `store` 改回 `file`；数据库文件可以留在原处，honk 会忽略它。
+
+
 ## 验收记录
 
 **LiBwrt 6.12 NSS，2026-11-22，`LiBwrt-2026.11.22.3.1-ZN_M2-NOWIFI-6.12-NSS-ebpf`，6.12.116**
@@ -82,4 +102,4 @@ Honk 占用 22 MB RSS 加 20.1 MB BPF map memlock，两者有重叠：进程通�
 
 ## 构建来源
 
-归档实现位于 [archive/honk-doona-20261116](https://github.com/osGex0o0II/ZN-M2-No-WIFI-Builder/tree/archive/honk-doona-20261116)。本版采用固定哈希的官方 ARM64 musl stock-full 资产。镜像中保留许可证与 Doona 声明，对应源码见 [NOTICE.md](../NOTICE.md)。
+归档实现见 [PR #84](https://github.com/osGex0o0II/ZN-M2-No-WIFI-Builder/pull/84)，该分支已被 [PR #86](https://github.com/osGex0o0II/ZN-M2-No-WIFI-Builder/pull/86) 回退，历史文件仍可从对应提交取回。本版采用固定哈希的官方 ARM64 musl stock-full 资产。镜像中保留许可证与 Doona 声明，对应源码见 [NOTICE.md](../NOTICE.md)。

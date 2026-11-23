@@ -63,7 +63,9 @@ for marker in \
 	'dnsmasq-ssrplus.conf' \
 	'dnsmasq-ssrplus.d' \
 	'dnsmasq-homeproxy.conf' \
-	'dnsmasq-homeproxy.d'; do
+	'dnsmasq-homeproxy.d' \
+	'0-sing-box-auto-redirect.nft' \
+	'homeproxy_autosetup'; do
 	grep -Fq -- "$marker" "$shared" || {
 		echo "FAIL: cleanup is missing: $marker" >&2
 		exit 1

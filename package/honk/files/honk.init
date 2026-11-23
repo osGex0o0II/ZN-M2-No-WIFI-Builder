@@ -9,6 +9,13 @@ STOP=01
 
 CONF=honk
 PROG=/usr/bin/honk-core
+BPFFS=/sys/fs/bpf
+# honk loads an embedded eBPF object and the verifier allocates transient kernel
+# memory while it walks the program. On a 256 MB board that allocation can fail
+# outright; the OOM killer then takes the process and, on this kernel, leaves
+# the verifier's working set behind. Below this floor the load cannot finish, so
+# refuse to start and say why instead of provoking an OOM kill.
+MEM_MIN_KB_DEFAULT=49152
 
 # OpenWrt calls enable for each init script during offline rootfs assembly.
 # Keep the runtime rc.common enable command available to the administrator.
@@ -19,10 +26,11 @@ fi
 start_service() {
 	config_load "$CONF"
 
-	local config_file store data_dir
+	local config_file store data_dir mem_min
 	config_get config_file config config_file /etc/honk/config.dae
 	config_get store config store file
 	config_get data_dir config data_dir /etc/honk/data
+	config_get mem_min config mem_min_kb "$MEM_MIN_KB_DEFAULT"
 
 	# dae creates the same dae0/daens pair and hooks the same interfaces.
 	if ubus call service list '{"name":"dae"}' 2>/dev/null |
@@ -56,6 +64,17 @@ start_service() {
 		return 1
 	fi
 
+	# A load that dies mid-verification leaves pinned maps behind, and a killed
+	# process never runs its own cleanup. Start from an empty bpffs so each
+	# attempt does not inherit the previous failure's kernel memory.
+	clear_pins
+
+	if ! mem_ok "$mem_min"; then
+		logger -t honk \
+			"$(mem_available)kB available, ${mem_min}kB required to load the eBPF object; not starting"
+		return 1
+	fi
+
 	procd_open_instance "$CONF"
 	procd_set_param command "$PROG" --config "$config_file"
 	[ "$store" = db ] && procd_append_param command --store db --data-dir "$data_dir"
@@ -63,10 +82,48 @@ start_service() {
 	procd_set_param limits core="0" nofile="1048576 1048576"
 	# A fatal exit is expected here: upstream issue #476 kills the process at
 	# the end of a configuration reload. procd brings it back in a few seconds.
-	procd_set_param respawn
+	# Cap the retries: on a board that cannot hold the verifier's working set
+	# every respawn repeats the OOM kill and leaks about 430 kB each time, so an
+	# unbounded loop drains the remaining memory. Five attempts cover a reload
+	# crash; the watchdog still restarts a healthy-but-dead instance later.
+	procd_set_param respawn 3600 5 5
 	procd_set_param stdout 1
 	procd_set_param stderr 1
 	procd_close_instance
+}
+
+clear_pins() {
+	# honk pins its maps at the root of bpffs and is the only pin user on these
+	# images (the init script mounts bpffs itself and refuses to run next to dae).
+	# Only clear while honk is down: another process may own pins otherwise.
+	[ -d "$BPFFS" ] || return 0
+	pidof honk-core >/dev/null 2>&1 && return 0
+	for pin in "$BPFFS"/*; do
+		[ -f "$pin" ] || continue
+		rm -f "$pin" 2>/dev/null
+	done
+	return 0
+}
+
+mem_available() {
+	local avail
+	avail="$(awk '/^MemAvailable:/ { print $2; exit }' /proc/meminfo 2>/dev/null)"
+	case "$avail" in ''|*[!0-9]*) avail=0 ;; esac
+	printf '%s\n' "$avail"
+}
+
+mem_ok() {
+	local need avail
+	need="${1:-$MEM_MIN_KB_DEFAULT}"
+	case "$need" in ''|*[!0-9]*) need=$MEM_MIN_KB_DEFAULT ;; esac
+	avail="$(mem_available)"
+	[ "$avail" -ge "$need" ]
+}
+
+# procd respawns crash-looped instances; the pins of a killed process stay.
+# rc.common calls service_stopped after a manual stop, so reclaim them there.
+service_stopped() {
+	clear_pins
 }
 
 reload_service() {

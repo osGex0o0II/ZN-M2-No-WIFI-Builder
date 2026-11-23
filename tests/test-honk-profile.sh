@@ -119,6 +119,77 @@ fi
 grep -Fq 'nfqueue_enable: false' "$package/config.dae"
 grep -Fq 'pname(dnsmasq)' "$package/config.dae"
 grep -Fq 'iifname != { "lo", "br-lan" } tcp dport 9527 reject' "$package/honk.nft"
+# A killed load leaves the verifier's pins and working set behind, and procd
+# then respawns into the same OOM kill. The init script must therefore refuse to
+# start on a board that cannot hold the load, cap the respawn count, and reclaim
+# the pins of a stopped instance.
+grep -Eq '^[[:space:]]*procd_set_param respawn [0-9]+ [0-9]+ [0-9]+' "$package/honk.init" || {
+  echo 'Honk respawn is unbounded, so an OOM loop repeats forever' >&2
+  exit 1
+}
+grep -Fq 'mem_min_kb' "$package/honk.init" || {
+  echo 'Honk init script has no memory floor' >&2
+  exit 1
+}
+grep -Fq 'service_stopped()' "$package/honk.init" || {
+  echo 'Honk init script does not reclaim pinned maps on stop' >&2
+  exit 1
+}
+grep -Fq 'option mem_min_kb' "$package/honk.config" || {
+  echo 'Honk UCI config does not document the memory floor' >&2
+  exit 1
+}
+
+# The memory floor must actually block a start on a board without headroom, and
+# the pin reclaim must clear stale maps without touching unrelated bpffs dirs.
+mkdir -p "$tmp/memtest/bin" "$tmp/memtest/bpffs"
+cat > "$tmp/memtest/bin/awk" <<'EOF'
+#!/bin/sh
+# Only the MemAvailable probe matters here.
+[ -r "$MEMINFO" ] && sed -n 's/^MemAvailable:[[:space:]]*\([0-9]*\).*/\1/p' "$MEMINFO"
+EOF
+cat > "$tmp/memtest/bin/pidof" <<'EOF'
+#!/bin/sh
+exit 1
+EOF
+chmod +x "$tmp/memtest/bin/"*
+printf 'MemAvailable:       8192 kB\n' > "$tmp/memtest/meminfo.low"
+printf 'MemAvailable:      65536 kB\n' > "$tmp/memtest/meminfo.ok"
+: > "$tmp/memtest/bpffs/CONN_STATE_MAP"
+: > "$tmp/memtest/bpffs/ROUTING_POLICY_ROOT"
+mkdir -p "$tmp/memtest/bpffs/some-dir"
+
+if MEMINFO="$tmp/memtest/meminfo.low" PATH="$tmp/memtest/bin:$PATH" \
+  sh -c '. "$1"; mem_ok 49152' sh "$package/honk.init"; then
+  echo 'Honk accepted a start below the eBPF memory floor' >&2
+  exit 1
+fi
+MEMINFO="$tmp/memtest/meminfo.ok" PATH="$tmp/memtest/bin:$PATH" \
+  sh -c '. "$1"; mem_ok 49152' sh "$package/honk.init" || {
+  echo 'Honk refused a start with enough memory' >&2
+  exit 1
+}
+# The init script pins BPFFS itself, so point it at the fixture after sourcing.
+PATH="$tmp/memtest/bin:$PATH" \
+  sh -c '. "$1"; BPFFS="$2"; clear_pins' sh "$package/honk.init" "$tmp/memtest/bpffs"
+[ ! -e "$tmp/memtest/bpffs/CONN_STATE_MAP" ] || {
+  echo 'Honk left stale pinned maps behind' >&2
+  exit 1
+}
+[ -d "$tmp/memtest/bpffs/some-dir" ] || {
+  echo 'Honk removed a bpffs directory it does not own' >&2
+  exit 1
+}
+# The guard has to be wired into the start path, not just defined.
+awk '/^start_service\(\)/,/^}/' "$package/honk.init" | grep -Fq 'mem_ok "$mem_min"' || {
+  echo 'Honk start path does not consult the eBPF memory floor' >&2
+  exit 1
+}
+awk '/^start_service\(\)/,/^}/' "$package/honk.init" | grep -Fq 'clear_pins' || {
+  echo 'Honk start path does not reclaim stale pins' >&2
+  exit 1
+}
+
 # A response fallback naming the same upstream as the request fallback makes
 # every answer re-query that upstream; honk then aborts the traversal with
 # "DNS response requery cycle" and serves SERVFAIL for every name.

@@ -22,13 +22,15 @@ ImmortalWrt 6.18 NSS 曾在 2026-11-22 试制同名变体，实测无法在 256 
 
 ## Doona 未启用的功能
 
-Doona 的「系统状态」会列出后端声明但不满足前置条件的功能。出厂配置下会出现三类提示，前两类来自配置，第三类是设计行为。
+Doona 的「系统状态」会列出后端声明但不满足前置条件的功能。三类提示里，前两类来自配置，第三类是设计行为。
 
 | 提示 | 原因 | 状态 |
 |:---|:---|:---|
 | 导入、修订历史（需要启动参数） | 修订历史、导入和回滚写进 `<data_dir>/state/honk.db`，需要 `--store db`。自 2026-11-24 起出厂即为 `db`，不再出现该提示。 | 已解决 |
-| 无法更新地理数据 | 出厂 `config.dae` 没有 `assets { geodata { ... } }`，两个 `geodata` 资产没有 HTTP(S) 来源，因此无法下载。`geodata` 设置本身还需要一个可写的状态数据库，该条件现已满足。 | 需自建 URL |
+| 无法更新地理数据 | 需要「路由真的加载了某个资产」＋「该资产有 HTTP(S) 来源」。出厂 `config.dae` 已带 `assets.geodata.geosite` 与一条 `domain(geosite: cn) -> direct(must)`，该规则与 `fallback: direct` 等价，不改路由。 | 出厂即可用 |
 | 流程记录只在查看时记录 | `experimental.native_api.record_flows` 默认 `true`，但只在有客户端持有流诊断需求时记录；没有客户端就不保留。 | 设计行为 |
+
+`domain(geosite: cn)` 是 `domain()` 条件的 `geosite:` 前缀写法。裸写 `geosite(cn)` 会被 honk 判为未知谓词，配置校验失败后 procd 会一直重启进程。geosite 的落盘路径是 `/usr/local/share/honk/geosite.dat`，由 init 脚本首次启动时从 `/usr/share/v2ray/geosite.dat` 复制；这条路径在 honk 的搜索顺序里优先级高于 apk 管理的 `/usr/share/honk/`，所以自动更新不会写坏包文件，也不会被下次 `apk upgrade` 覆盖回去。`geoip` 保持包内软链不变——本镜像没有任何规则匹配 `geoip:`，honk 不会去加载它。
 
 `--store db` 把受管理的 `.dae` 源存进 `<data_dir>/state/honk.db`。出厂即启用，代价与约束：
 

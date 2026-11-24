@@ -10,6 +10,12 @@ STOP=01
 CONF=honk
 PROG=/usr/bin/honk-core
 BPFFS=/sys/fs/bpf
+# Geodata lands here rather than in the apk-managed /usr/share/v2ray tree.
+# /usr/local/share/honk is the highest-priority location in honk's search order
+# that no package owns, so an honk-side update never writes into a path that
+# `apk upgrade` rewrites.
+GEODATA_DIR=/usr/local/share/honk
+GEODATA_SRC=/usr/share/v2ray/geosite.dat
 # honk loads an embedded eBPF object and the verifier allocates transient kernel
 # memory while it walks the program. On a 256 MB board that allocation can fail
 # outright; the OOM killer then takes the process and, on this kernel, leaves
@@ -59,6 +65,8 @@ start_service() {
 		return 1
 	fi
 
+	seed_geodata
+
 	if [ ! -r /sys/fs/cgroup/cgroup.controllers ]; then
 		logger -t honk 'cgroup v2 is unavailable'
 		return 1
@@ -104,6 +112,23 @@ clear_pins() {
 	done
 	return 0
 }
+
+# honk resolves geodata to the first existing file in a fixed search order; the
+# v2ray packages own /usr/share/v2ray and a later `apk upgrade` rewrites those
+# files. Copy instead of symlinking so an honk-side geodata update cannot write
+# back into an apk-managed path, and so the copy survives a package upgrade.
+# geosite is small (about 2.4 MB) and is the asset routing actually loads;
+# geoip stays in the package because nothing here matches on it.
+seed_geodata() {
+	local dir=$GEODATA_DIR src=$GEODATA_SRC
+	mkdir -p "$dir" 2>/dev/null || return 0
+	if [ ! -s "$dir/geosite.dat" ] && [ -s "$src" ]; then
+		cp -f "$src" "$dir/geosite.dat" 2>/dev/null ||
+			logger -t honk "cannot copy $src to $dir/geosite.dat"
+	fi
+	return 0
+}
+
 
 mem_available() {
 	local avail

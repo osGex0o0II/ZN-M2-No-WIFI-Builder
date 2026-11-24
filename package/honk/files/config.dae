@@ -61,11 +61,36 @@ dns {
     }
 }
 
+assets {
+    # Downloads fetch directly: the proxy groups this dashboard will later
+    # define must not be able to swallow the geodata files that the router
+    # itself depends on to start.
+    route: direct
+    geodata {
+        # doona reports "geodata update unavailable" until at least one asset
+        # is actually loaded, and an asset needs both a path and a URL. The
+        # rule below loads geosite, and this URL refreshes it. honk owns
+        # /usr/local/share/honk/geosite.dat (the init script seeds it from the
+        # v2ray package), so an update never rewrites a file that apk manages.
+        geosite: 'https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/release/geosite.dat'
+        # geoip is left to the built-in URLs. Nothing here matches on it, and
+        # honk only downloads assets that routing actually loaded.
+        auto_update: true
+        cron: '0 3 * * *'
+        checksum: true
+    }
+}
+
 routing {
     # dnsmasq's own upstream queries leave through the WAN. Match them by
     # process name so a later proxy node cannot swallow the resolver that every
     # LAN client depends on.
     pname(dnsmasq) && l4proto(udp, tcp) && dport(53) -> direct(must)
+
+    # Loading geosite is what makes the geodata asset live, which is the
+    # precondition doona checks. The verdict equals the fallback below, so this
+    # rule does not change where traffic goes.
+    domain(geosite: cn) -> direct(must)
 
     # Everything else is direct until nodes and rules are added in doona. A
     # direct verdict returns the packet to the kernel, so NSS/ECM and the PPE

@@ -22,22 +22,23 @@ ImmortalWrt 6.18 NSS 曾在 2026-11-22 试制同名变体，实测无法在 256 
 
 ## Doona 未启用的功能
 
-Doona 的「系统状态」会列出后端声明但不满足前置条件的功能。镜像出厂配置下会出现三类提示，都是有意为之，不是故障。
+Doona 的「系统状态」会列出后端声明但不满足前置条件的功能。出厂配置下会出现三类提示，前两类来自配置，第三类是设计行为。
 
-| 提示 | 原因 | 解决办法 |
+| 提示 | 原因 | 状态 |
 |:---|:---|:---|
-| 导入、修订历史（需要启动参数） | 镜像以 `--store file` 启动。修订历史、导入和回滚写进 `<data_dir>/state/honk.db`，需要 `--store db`。文件模式只能导出。 | 把 `/etc/config/honk` 的 `store` 改成 `db` 后重启 Honk，见下方说明。 |
-| 无法更新地理数据 | 出厂 `config.dae` 没有 `assets { geodata { ... } }`，两个 `geodata` 资产没有 HTTP(S) 来源，因此无法下载。`geodata` 设置本身还需要一个可写的状态数据库。 | 在 `assets.geodata` 写明 `geoip`/`geosite` 的 URL，重启 Honk；`settings` 里的来源和计划另需 `--store db`。 |
-| 流程记录只在查看时记录 | `experimental.native_api.record_flows` 默认 `true`，但只在有客户端持有流诊断需求时记录；没有客户端就不保留。 | 在「设置 → 临时运行时覆盖」把流记录显式设为 `on`，或保持页面打开。 |
+| 导入、修订历史（需要启动参数） | 修订历史、导入和回滚写进 `<data_dir>/state/honk.db`，需要 `--store db`。自 2026-11-24 起出厂即为 `db`，不再出现该提示。 | 已解决 |
+| 无法更新地理数据 | 出厂 `config.dae` 没有 `assets { geodata { ... } }`，两个 `geodata` 资产没有 HTTP(S) 来源，因此无法下载。`geodata` 设置本身还需要一个可写的状态数据库，该条件现已满足。 | 需自建 URL |
+| 流程记录只在查看时记录 | `experimental.native_api.record_flows` 默认 `true`，但只在有客户端持有流诊断需求时记录；没有客户端就不保留。 | 设计行为 |
 
-`--store db` 会把受管理的 `.dae` 源存进 `<data_dir>/state/honk.db`。启用前先确认：
+`--store db` 把受管理的 `.dae` 源存进 `<data_dir>/state/honk.db`。出厂即启用，代价与约束：
 
 - `global.data_dir` 与 `--data-dir` 必须一致（本镜像均为 `/etc/honk/data`）。
 - 数据库为空时，启动会从 `-c` 导入一次。这一步要求 `native_api.enabled` 与 `config_write` 都为真，并且已经配置凭据——本镜像已满足。
 - 导入时会剥离 `native_api`/`clash_api` 里的 `secret:`。本镜像用的是 `password_auth`，不受影响。
 - 数据库模式不支持 Clash API；本镜像没有 `clash_api`，不受影响。
 - 最多保留 50 个修订、共 16 MiB。`/etc/honk/data` 位于 `/overlay`，出厂余量约 46 MB。
-- 回退到文件模式只需把 `store` 改回 `file`；数据库文件可以留在原处，honk 会忽略它。
+- **数据库一旦有内容，`/etc/honk/config.dae` 就不再是权威来源**：之后对它的改动只在数据库清空后才会重新导入。改配置请走 Doona，或先执行 `honk-core admin reset` 再重启。
+- 回退到文件模式：`uci set honk.config.store='file'` 后重启 Honk；数据库文件可以留在原处，honk 会忽略它。
 
 
 ## 验收记录

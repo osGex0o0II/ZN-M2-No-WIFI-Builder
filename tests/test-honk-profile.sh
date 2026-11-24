@@ -139,6 +139,13 @@ grep -Fq 'option mem_min_kb' "$package/honk.config" || {
   echo 'Honk UCI config does not document the memory floor' >&2
   exit 1
 }
+# The state database is what doona needs for import and revision history, and
+# the geodata settings require a writable state db too. It must ship enabled,
+# otherwise the dashboard reports those features as unavailable out of the box.
+grep -Fq "option store 'db'" "$package/honk.config" || {
+  echo 'Honk UCI config does not enable the state database' >&2
+  exit 1
+}
 
 # The memory floor must actually block a start on a board without headroom, and
 # the pin reclaim must clear stale maps without touching unrelated bpffs dirs.

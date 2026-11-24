@@ -210,4 +210,37 @@ printf '%s\n' "$response_block" | grep -Eq '^[[:space:]]*fallback: accept[[:spac
   echo 'Honk default config does not accept the request-rule answer' >&2
   exit 1
 }
+
+# doona reports "geodata update unavailable" until routing loads at least one
+# asset, and an asset needs both an on-disk file and an HTTP(S) source. Blank
+# either half and the dashboard degrades back to the warning.
+grep -Eq '^[[:space:]]*assets[[:space:]]*\{' "$package/config.dae" || {
+  echo 'Honk default config has no assets block, so geodata can never update' >&2
+  exit 1
+}
+grep -Eq "^[[:space:]]*geosite:[[:space:]]*'https://" "$package/config.dae" || {
+  echo 'Honk default config names no geosite download URL' >&2
+  exit 1
+}
+grep -Fq 'domain(geosite: cn) -> direct(must)' "$package/config.dae" || {
+  echo 'Honk default config never loads geosite, so the asset stays unloaded' >&2
+  exit 1
+}
+# geosite(cn) is not a predicate; honk rejects the file and procd then crash
+# loops on every restart.
+if grep -Eq '(^|[^a-z])geosite\(cn\)' "$package/config.dae"; then
+  echo 'Honk default config uses the invalid geosite() predicate' >&2
+  exit 1
+fi
+# geodata must not land in an apk-owned path, or an update rewrites a package
+# file and the next `apk upgrade` reverts it.
+grep -Fq 'GEODATA_DIR=/usr/local/share/honk' "$package/honk.init" || {
+  echo 'Honk geodata is not seeded outside the apk-managed v2ray tree' >&2
+  exit 1
+}
+awk '/^start_service\(\)/,/^}/' "$package/honk.init" | grep -Fq 'seed_geodata' || {
+  echo 'Honk start path never seeds the geodata asset' >&2
+  exit 1
+}
+
 echo 'PASS: Honk profile pairs, fragment resolution, final kernel gate, package isolation and LuCI ACL'

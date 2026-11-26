@@ -239,7 +239,7 @@ ${validation}。适用于 ZN-M2 纯有线配置，Linux ${kernel}，转发加速
 
 ### Honk + Doona
 
-- Honk 默认停用。先备份配置，从 LuCI「服务 → Honk 代理」显式启动。
+- Honk 默认停用。先备份配置，从 LuCI「服务 → Honk」显式启动。
 - 从信任的 LAN 使用路由器 IP 访问 Doona 的 9527 端口，首次访问创建管理员。
 - 默认分流为直连。首版关闭 NFQUEUE，冷缓存 DNS、UDP 和重载均列入实机验收。
 - 内核、代理版本、数据文件和构建清单见本次 Actions Artifact。

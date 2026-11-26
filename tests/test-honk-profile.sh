@@ -99,6 +99,12 @@ jq -e '
 ' "$package/luci/acl.d/luci-app-honk.json" >/dev/null
 jq -e '.["admin/services/honk"].depends.acl == ["luci-app-honk"]' \
   "$package/luci/menu.d/luci-app-honk.json" >/dev/null
+# The menu entry keeps the upstream project name; a Chinese suffix would drift
+# from every other surface (workflow names, release notes, docs).
+jq -e '.["admin/services/honk"].title == "Honk"' \
+  "$package/luci/menu.d/luci-app-honk.json" >/dev/null
+grep -Fq "E('h2', {}, 'Honk')" "$package/luci/view/honk/overview.js" ||
+  { echo 'Honk page heading must use the upstream name' >&2; exit 1; }
 sh -n "$package/honk.init" "$package/honk.status"
 IPKG_INSTROOT="$tmp/rootfs" sh -eu -c '
   enable() { exit 1; }

@@ -13,7 +13,7 @@ ImmortalWrt 6.18 NSS 曾在 2026-11-22 试制同名变体，实测无法在 256 
 
 ## 启停与管理
 
-- 出厂默认停止 Honk。先备份配置和原版镜像，通过 LuCI「服务 → Honk 代理」显式启动。
+- 出厂默认停止 Honk。先备份配置和原版镜像，通过 LuCI「服务 → Honk」显式启动。
 - Doona 在受信任的 LAN 上通过路由器 IP 和 9527 端口访问。LuCI 页面提供跳转入口。首次打开 Doona 时创建管理员。
 - 防火墙只允许 `br-lan` 和 loopback 使用该端口。自建受信任的 VLAN 或 LAN 接口时，同步检查 Honk 配置和 `/etc/nftables.d/30-zn-m2-honk.nft`。
 - 默认分流为直连。NFQUEUE 默认关闭，Honk 的上游 DNS 与 dnsmasq 分离。`dns.routing.response` 使用 `fallback: accept`：把响应 fallback 指向与请求 fallback 相同的上游会让每个名称返回 SERVFAIL。

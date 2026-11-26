@@ -57,7 +57,7 @@ return view.extend({
 		};
 
 		return E([
-			E('h2', {}, 'Honk 代理'),
+			E('h2', {}, 'Honk'),
 			E('div', { 'class': 'cbi-map-descr' },
 				'本版本的透明代理由 honk 提供，控制面板是内嵌的 doona。' +
 				'doona 是一个独立的 Web 应用，不在 LuCI 内，需要在新标签页打开。'),

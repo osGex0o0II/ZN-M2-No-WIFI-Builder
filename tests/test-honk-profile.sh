@@ -212,18 +212,32 @@ printf '%s\n' "$response_block" | grep -Eq '^[[:space:]]*fallback: accept[[:spac
 }
 
 # doona reports "geodata update unavailable" until routing loads at least one
-# asset, and an asset needs both an on-disk file and an HTTP(S) source. Blank
-# either half and the dashboard degrades back to the warning.
+# asset. The routing rule is the half that matters; the download URL is left
+# out on purpose, because naming one replaces honk's built-in list instead of
+# adding a mirror, and the built-in list's jsdelivr fallback is what succeeds
+# on networks that filter raw.githubusercontent.com per IPv4 address.
 grep -Eq '^[[:space:]]*assets[[:space:]]*\{' "$package/config.dae" || {
   echo 'Honk default config has no assets block, so geodata can never update' >&2
   exit 1
 }
-grep -Eq "^[[:space:]]*geosite:[[:space:]]*'https://" "$package/config.dae" || {
-  echo 'Honk default config names no geosite download URL' >&2
+if grep -Eq "^[[:space:]]*geosite:[[:space:]]*'https://" "$package/config.dae"; then
+  echo 'Honk default config pins one geosite URL, which drops the jsdelivr fallback' >&2
   exit 1
-}
+fi
 grep -Fq 'domain(geosite: cn) -> direct(must)' "$package/config.dae" || {
   echo 'Honk default config never loads geosite, so the asset stays unloaded' >&2
+  exit 1
+}
+# 1.1.1.1 answers ordinary lookups here but honk's own queries through it fail
+# with resolution_failed, which stops every geodata download before TLS.
+grep -Fq "bootstrap_resolver: '223.5.5.5:53'" "$package/config.dae" || {
+  echo 'Honk bootstrap resolver is not the one its downloader can reach' >&2
+  exit 1
+}
+# honk resolves the download host itself; without this rule its queries follow
+# whatever proxy policy the routing table applies.
+grep -Fq 'pname(honk-core) && l4proto(udp, tcp) && dport(53) -> direct(must)' "$package/config.dae" || {
+  echo 'Honk does not exempt its own resolver egress from proxy routing' >&2
   exit 1
 }
 # geosite(cn) is not a predicate; honk rejects the file and procd then crash

@@ -29,7 +29,11 @@ global {
     tcp_check_url: 'https://www.gstatic.com/generate_204'
     tcp_check_http_method: HEAD
     check_interval: 300s
-    bootstrap_resolver: '1.1.1.1:53'
+    # Used for the downloader's own lookups (geodata, subscriptions). 1.1.1.1
+    # resolves here, but honk's own queries through it fail on this network with
+    # "resolution_failed", so the geodata update never starts. 223.5.5.5 is the
+    # resolver the config already trusts for dns.upstream.local.
+    bootstrap_resolver: '223.5.5.5:53'
     # NFQUEUE 320 exists to hold ambiguous LAN UDP first packets. On this
     # kernel it starves dnsmasq: with it enabled every DNS query that has to go
     # out through the WAN stalls (verified on 6.12.112, beta.6), so the whole
@@ -68,13 +72,19 @@ assets {
     route: direct
     geodata {
         # doona reports "geodata update unavailable" until at least one asset
-        # is actually loaded, and an asset needs both a path and a URL. The
-        # rule below loads geosite, and this URL refreshes it. honk owns
-        # /usr/local/share/honk/geosite.dat (the init script seeds it from the
-        # v2ray package), so an update never rewrites a file that apk manages.
-        geosite: 'https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/release/geosite.dat'
-        # geoip is left to the built-in URLs. Nothing here matches on it, and
-        # honk only downloads assets that routing actually loaded.
+        # is actually loaded, and the rule below is what loads geosite.
+        #
+        # No URL is set on purpose. Naming one replaces honk's built-in list
+        # instead of adding a mirror, and this network filters
+        # raw.githubusercontent.com per IPv4 address (three of its four
+        # addresses refuse the connection while the fourth works, and curl
+        # retries across them while honk does not). The built-in list is
+        # raw.githubusercontent.com first, fastly.jsdelivr.net second, and the
+        # fallback is what makes the update succeed here.
+        #
+        # Updates land in <data_dir>/geosite.dat, which is earlier in honk's
+        # search order than /usr/local/share/honk/; the init script's seed copy
+        # there only guarantees an asset exists before the first download.
         auto_update: true
         cron: '0 3 * * *'
         checksum: true
@@ -86,6 +96,9 @@ routing {
     # process name so a later proxy node cannot swallow the resolver that every
     # LAN client depends on.
     pname(dnsmasq) && l4proto(udp, tcp) && dport(53) -> direct(must)
+    # honk resolves the geodata host with the same resolver path; exempt it too
+    # or the download inherits whatever policy the proxy rules would apply.
+    pname(honk-core) && l4proto(udp, tcp) && dport(53) -> direct(must)
 
     # Loading geosite is what makes the geodata asset live, which is the
     # precondition doona checks. The verdict equals the fallback below, so this

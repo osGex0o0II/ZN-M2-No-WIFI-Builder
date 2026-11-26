@@ -27,10 +27,16 @@ Doona 的「系统状态」会列出后端声明但不满足前置条件的功�
 | 提示 | 原因 | 状态 |
 |:---|:---|:---|
 | 导入、修订历史（需要启动参数） | 修订历史、导入和回滚写进 `<data_dir>/state/honk.db`，需要 `--store db`。自 2026-11-24 起出厂即为 `db`，不再出现该提示。 | 已解决 |
-| 无法更新地理数据 | 需要「路由真的加载了某个资产」＋「该资产有 HTTP(S) 来源」。出厂 `config.dae` 已带 `assets.geodata.geosite` 与一条 `domain(geosite: cn) -> direct(must)`，该规则与 `fallback: direct` 等价，不改路由。 | 出厂即可用 |
+| 无法更新地理数据 | 需要「路由真的加载了某个资产」。出厂 `config.dae` 里有一条 `domain(geosite: cn) -> direct(must)` 负责加载，该规则与 `fallback: direct` 等价，不改路由。下载地址故意留空，见下段。 | 出厂即可用 |
 | 流程记录只在查看时记录 | `experimental.native_api.record_flows` 默认 `true`，但只在有客户端持有流诊断需求时记录；没有客户端就不保留。 | 设计行为 |
 
-`domain(geosite: cn)` 是 `domain()` 条件的 `geosite:` 前缀写法。裸写 `geosite(cn)` 会被 honk 判为未知谓词，配置校验失败后 procd 会一直重启进程。geosite 的落盘路径是 `/usr/local/share/honk/geosite.dat`，由 init 脚本首次启动时从 `/usr/share/v2ray/geosite.dat` 复制；这条路径在 honk 的搜索顺序里优先级高于 apk 管理的 `/usr/share/honk/`，所以自动更新不会写坏包文件，也不会被下次 `apk upgrade` 覆盖回去。`geoip` 保持包内软链不变——本镜像没有任何规则匹配 `geoip:`，honk 不会去加载它。
+`domain(geosite: cn)` 是 `domain()` 条件的 `geosite:` 前缀写法。裸写 `geosite(cn)` 会被 honk 判为未知谓词，配置校验失败后 procd 会一直重启进程。
+
+`assets.geodata` 里**不写 `geosite:` 的 URL**，因为官方文档明确「文件里的 URL 会替换内置列表，而不是追加镜像」。honk 内置的顺序是 `raw.githubusercontent.com` 在前、`fastly.jsdelivr.net` 在后，而这个网络的 `raw.githubusercontent.com` 按 IPv4 逐地址过滤：四个地址里只有 `185.199.110.133` 能连，其余三个直接拒绝握手。curl 会在地址间重试所以看不出问题，honk 的下载器不会，撞上坏地址就报 `tls_failed`。保留内置列表才有 jsdelivr 这条真正可用的退路。
+
+落盘位置是 **`<data_dir>/geosite.dat`**，即 `/etc/honk/data/geosite.dat`，这个路径在 honk 的搜索顺序里排第二，早于 `/usr/local/share/honk/`。init 脚本仍会从 `/usr/share/v2ray/geosite.dat` 复制一份到 `/usr/local/share/honk/`，作用是让首次启动（还没下载过）就有可用资产，避免 Doona 直接报缺文件。
+
+`geoip` 保持包内软链不变——本镜像没有任何规则匹配 `geoip:`，honk 不会去加载它，也就不会下载。
 
 `--store db` 把受管理的 `.dae` 源存进 `<data_dir>/state/honk.db`。出厂即启用，代价与约束：
 
